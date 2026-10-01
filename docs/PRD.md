@@ -5,7 +5,7 @@
 |  |  |
 | --- | --- |
 | Departemen | Talent Development and Inovation |
-| Versi | 1.2 (siap dibangun; Open Questions tidak memblokir) |
+| Versi | 1.3 (siap dibangun; Open Questions tidak memblokir) |
 | Tanggal | 1 Oktober 2026 |
 | Target demo | 2 Oktober 2026 |
 | Hari-H wawancara | 3-4 Oktober 2026 (offline, ruang DC-302) |
@@ -17,7 +17,7 @@
 INFENTRA 2.0 membuka pendaftaran panitia (saat ini 67 pendaftar, kemungkinan 70+). Data masuk lewat Google Form ke Google Sheets dengan banyak kolom berisi link Drive (sertifikat, CV, portofolio). Masalah yang ingin diselesaikan:
 
 - Sulit memilah pendaftar per divisi (Pilihan 1 dan 2) dan membaca berkas satu per satu lewat link Drive.
-- Penjadwalan 70 calon ke slot 10 menit selama 2 hari dengan spreadsheet rawan dobel-booking dan sulit dibagikan ke calon.
+- Penjadwalan sekitar 90 calon ke slot 10 menit selama 2 hari dengan spreadsheet rawan dobel-booking dan sulit dibagikan ke calon.
 - Penilaian tersebar, tidak seragam, dan susah direkap.
 
 ## 2. Tujuan
@@ -40,14 +40,15 @@ INFENTRA 2.0 membuka pendaftaran panitia (saat ini 67 pendaftar, kemungkinan 70+
 ## 4. Alur Wawancara (terkonfirmasi)
 
 - Format **panel**: Ketua Pelaksana dan seluruh koor divisi berada di satu ruangan (DC-302, satu-satunya ruangan yang dipinjam).
-- Satu calon = satu sesi **10 menit total**. Ketua Pelaksana membuka dengan pertanyaan umum, lalu koor **Pilihan 1 dan Pilihan 2** bertanya sesuai divisi yang dipilih.
-- Mulai sekitar pukul 08.00, 70 calon dibagi ke 2 hari (sekitar 35 calon per hari).
+- Satu calon = satu sesi **10 menit total**. Ketua Pelaksana membuka dengan pertanyaan umum, lalu koor **Pilihan 1 dan Pilihan 2** bertanya bergantian sesuai divisi yang dipilih. Ketua Pelaksana dan semua koor duduk berjajar menghadap calon.
+- Calon yang Pilihan 1 dan Pilihan 2-nya sama tidak punya aturan khusus: karena satu divisi hanya punya satu koor, hanya koor itu (bersama Ketua Pelaksana) yang menilai.
+- Mulai sekitar pukul 08.00. Data CSV per 30 September: 91 baris, 89 orang unik (2 orang mengirim form dua kali), dibagi ke 2 hari, sekitar 45 calon per hari.
 
 **Istirahat (ishoma):** 1 jam per blok, wajib ada setiap masuk waktu sholat; ada dua blok per hari, **Dzuhur dan Ashar**. Jam mulai tiap blok diatur admin sebagai data yang bisa diubah (bukan dikunci di kode).
 
 **Calon HMIF:** anak HMIF tidak perlu wawancara, sehingga tidak diberi slot. Jumlah sesi per hari berkurang dan waktu yang bebas dipakai untuk memajukan istirahat atau mempercepat selesai; admin menyesuaikan jam blok ishoma setelah melihat perkiraan jam selesai dari generator.
 
-**Estimasi beban:** 35 sesi x 10 menit = sekitar 5,8 jam bersih per hari. Mulai 08.00 dengan dua blok ishoma (masing-masing 1 jam), selesai sekitar 15.50 jika semua 35 calon wawancara; setiap calon HMIF yang dibebaskan memajukan jam selesai 10 menit.
+**Estimasi beban:** 89 sesi x 10 menit = sekitar 14,8 jam, atau sekitar 7,4 jam bersih per hari. Mulai 08.00 dengan dua blok ishoma (masing-masing 1 jam), selesai sekitar 17.25 jika semua 89 calon diwawancarai; setiap calon HMIF yang dibebaskan memajukan jam selesai total 10 menit (sekitar 5 menit per hari).
 
 **Implikasi ke sistem:** karena semua pewawancara hadir di ruangan yang sama, penjadwalan tidak perlu memeriksa ketersediaan tiap koor. Masalahnya menjadi **mengurutkan calon ke slot 10 menit** per hari tanpa dobel-booking. Sistem cukup menampilkan, untuk setiap calon, koor mana yang relevan (Pilihan 1 dan 2).
 
@@ -96,7 +97,7 @@ Skala **1-5** per aspek, disimpan **per pewawancara per sesi**. Bobot antar-aspe
 - `rubric_aspects` (nama, urutan, aktif)
 - `import_logs` (waktu, jumlah baru/diperbarui)
 
-Kunci unik import: kombinasi timestamp form + nama (NIM belum bisa jadi kunci, lihat Open Questions).
+Kunci import (`import_key`): nama ternormalisasi + nomor WhatsApp ternormalisasi. Baris dengan kunci sama = orang yang sama mengirim form ulang, data terbaru dipakai. Nama sama dengan WhatsApp berbeda dipisah dan diberi badge. NIM tidak bisa jadi kunci karena 72 dari 91 baris kosong.
 
 ## 8. Rekomendasi Teknis
 
@@ -143,7 +144,7 @@ Kunci unik import: kombinasi timestamp form + nama (NIM belum bisa jadi kunci, l
 2. **Jam mulai blok ishoma** Dzuhur dan Ashar tiap hari (default sementara bisa diatur di admin).
 3. **Urutan calon** saat generate jadwal dan pembagian ke hari 1 dan hari 2: berdasarkan waktu daftar, angkatan, atau acak?
 4. **Bobot rubrik:** rata-rata sederhana cukup, atau ada aspek yang lebih penting?
-5. **Pilihan 1 sama dengan Pilihan 2:** belum diputuskan; sementara hanya ditandai.
+5. **Pilihan 1 sama dengan Pilihan 2** (36 dari 91 baris): terjawab. Koor tiap pilihan mewawancarai bergantian; untuk pilihan yang sama itu otomatis satu koor, dan keputusan hanya satu per divisi. Sistem hanya menampilkan badge di daftar.
 6. **Jam selesai** dan batas pemakaian ruang DC-302 tiap hari.
 7. **Role non-koor:** apakah SC, PIC, sekretaris, dan bendahara boleh melihat semua data (Admin) atau hanya-lihat?
 

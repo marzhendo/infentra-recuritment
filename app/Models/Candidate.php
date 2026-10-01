@@ -14,15 +14,19 @@ class Candidate extends Model
     use HasFactory;
 
     protected $fillable = [
+        'import_key',
         'name',
         'nim',
+        'whatsapp',
         'angkatan',
         'pilihan_1_id',
         'pilihan_2_id',
-        'file_certificate',
+        'file_cert_pkkmb',
+        'file_cert_wpi',
         'file_cv',
         'file_portfolio',
         'form_timestamp',
+        'form_data',
         'status',
         'is_hmif',
     ];
@@ -32,6 +36,8 @@ class Candidate extends Model
         return [
             'status' => CandidateStatus::class,
             'is_hmif' => 'boolean',
+            'form_timestamp' => 'datetime',
+            'form_data' => 'array',
         ];
     }
 

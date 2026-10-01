@@ -5,9 +5,12 @@ Read `AGENTS.md` and `docs/PRD.md` first. Build only what is listed. No scheduli
 ## Decisions already made (answers to your Phase 2 questions)
 - CSV parsing: use `league/csv`. It is the only new package allowed in this phase.
 - Panels: ONE Filament panel at `/admin`. Admin vs Koor differences come later via policies (Phase 5).
-- Duplicates: the import key is `form_timestamp + normalized name`. If the same normalized name appears
-  with a different timestamp, do NOT merge or overwrite. Import both rows and show a "Possible duplicate" badge.
-  I will decide the merge policy later.
+- Duplicates (decided from the real data): a person is identified by `import_key` = normalized name + normalized
+  WhatsApp number. Rows sharing an `import_key` are the SAME person who resubmitted the form: keep ONE candidate,
+  the latest timestamp wins for all form fields. If the same normalized name appears with a DIFFERENT WhatsApp
+  number, they stay separate candidates and get a "Possible duplicate" badge (no merge).
+- Normalization: name = trimmed, whitespace collapsed, case-insensitive. WhatsApp = digits only, with a leading `0`,
+  `62` or `+62` normalized to `62`.
 - Import runs synchronously (about 70 rows). No queues, no Filament ImportAction.
 
 ## Step A - Close the Phase 1 gate (evidence was missing)
@@ -20,22 +23,39 @@ After this step do NOT run `migrate:fresh` again. From here on, change the schem
 
 ## Step B - Schema fixes (new migration, no fresh)
 Input file: `storage/app/private/imports/candidates.csv` (gitignored; add the path to `.gitignore` if not ignored).
-0. Read ONLY the header row of that CSV. Print a table: CSV header text -> proposed column. Then WAIT for my OK before continuing.
-Known so far: the form has TWO certificate fields (PKKMB certificate and WPI certificate), plus CV and Portfolio, so the single `file_certificate` column is wrong.
-Planned changes, to be confirmed against the real headers:
-- `form_timestamp`: change from string to nullable datetime. The CSV format is `d/m/Y H:i:s` (example `22/09/2026 14:50:35`).
-- Split the certificate column into `file_cert_pkkmb` and `file_cert_wpi`; keep `file_cv`, `file_portfolio`.
-- Add `form_data` (json, nullable) that stores the full original CSV row keyed by header text, so no form answer is ever lost.
+The real CSV has 12 columns. Header cells contain line breaks inside the quoted cell, so match each header on its
+FIRST LINE only (trimmed, case-insensitive). Use this fixed mapping:
+
+| CSV header (first line) | Column | Notes |
+|---|---|---|
+| Timestamp | `form_timestamp` | datetime, format `j/n/Y G:i:s` |
+| Nama Lengkap | `name` | trim |
+| Angkatan | `angkatan` | 4-digit string (2024, 2025, 2026) |
+| Pilihan 1 / Pilihan 2 | `pilihan_1_id` / `pilihan_2_id` | resolve by division name or alias |
+| Sertifikat PKKMB/Bukti keikutsertaan | `file_cert_pkkmb` | Drive URL |
+| Sertifikat WPI/Bukti keikutsertaan | `file_cert_wpi` | Drive URL |
+| CV | `file_cv` | Drive URL |
+| WhatsApp | `whatsapp` | keep original text; admin-only, NEVER on public pages |
+| Email Address | (ignored) | 100% empty; still kept inside `form_data` |
+| Portofolio | `file_portfolio` | optional, only a few rows (PDD and IT Team) |
+| NIM | `nim` | optional: most rows are empty; must stay editable in the admin |
+
+Schema changes (new migration only):
+- `form_timestamp`: string -> nullable datetime.
+- Replace `file_certificate` with `file_cert_pkkmb` and `file_cert_wpi` (nullable text).
+- Add `whatsapp` (nullable string) and `form_data` (json, nullable; full original row keyed by the first-line header text, so nothing is lost).
+- Replace the previous import key with a unique `import_key` column (string) = normalized name + `|` + normalized WhatsApp. If WhatsApp is empty, use the name alone.
 - Update models, factories and tests accordingly.
 
 ## Step C - Import service (TDD)
 Create a plain class `App\Services\CandidateImporter` (no Filament dependency). Write the tests first.
-- Map columns by header text, never by column position. Handle BOM, quoted fields and blank trailing lines.
-- Parse timestamps as `d/m/Y H:i:s`. Trim names. Store `angkatan` consistently.
+- Map columns by first-line header text (see Step B), never by column position. Handle BOM, quoted fields with embedded line breaks and blank trailing lines.
+- Parse timestamps as `j/n/Y G:i:s`: day, month and hour may have one digit (example `29/09/2026 8:14:52`). Trim every cell. Store `angkatan` as a 4-digit string.
 - Resolve `Pilihan 1` and `Pilihan 2` to divisions by name or alias, case-insensitive and trimmed. Unknown division name: record a row error with the line number and skip that row. Never crash the whole import.
-- Idempotent upsert by the import key. On update, never touch `is_hmif`, `status`, slots, scores, decisions or placements.
+- Idempotent upsert by `import_key`. When several rows share a key, the latest timestamp wins for all form fields and the earlier timestamps are stored in `form_data` under `previous_submissions`. Non-empty NIM from any row is kept. On update, never touch `is_hmif`, `status`, slots, scores, decisions or placements.
 - Write one `import_logs` row per run. Return a summary: created, updated, skipped, errors (with line numbers).
-Required tests: importing the same file twice gives 0 created on the second run; BOM file; unknown division; duplicate-name rows are both imported; `is_hmif` survives a re-import.
+Tests must use a small SYNTHETIC fixture CSV that you generate (fake names, fake phone numbers, fake Drive links). Never copy rows from the real candidate file into tests or commits. The fixture must reproduce the real quirks: multi-line header cells, a one-digit hour/day timestamp, a blank NIM, a blank Portfolio, and a resubmission pair.
+Required tests: importing the same file twice gives 0 created on the second run; BOM file; header with embedded line break; single-digit hour/day timestamps; unknown division; same name + same WhatsApp across two rows gives ONE candidate with the later row's files; same name + different WhatsApp gives TWO candidates; `+62`, `62` and `0` WhatsApp forms normalize to the same key; `is_hmif` survives a re-import.
 
 ## Step D - Filament CandidateResource
 Generate with artisan and follow the v5 generated shape (see AGENTS.md section 4). Indonesian labels.
@@ -51,7 +71,7 @@ Generate with artisan and follow the v5 generated shape (see AGENTS.md section 4
 
 ## Verification gate
 - `php artisan test` passes (show summary).
-- Import the real CSV twice. Show both summaries; the second must show 0 created.
+- Import the real CSV twice. Show both summaries; the second must show 0 created. The first run should end with 89 candidates (the file has 91 rows including 2 resubmissions) and 36 candidates whose Pilihan 1 equals Pilihan 2.
 - Show `php artisan route:list --path=admin` summary.
 - A test proves the bulk HMIF action and that a re-import keeps `is_hmif`.
 - `git status` shows no CSV or NIM data is tracked.
