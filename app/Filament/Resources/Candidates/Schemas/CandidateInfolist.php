@@ -25,13 +25,14 @@ class CandidateInfolist
                 Section::make('Data Kandidat')
                     ->schema([
                         Grid::make(2)->schema([
-                            TextEntry::make('name')->label('Nama Lengkap'),
+                            TextEntry::make('display_name')->label('Nama Lengkap'),
                             TextEntry::make('nim')->label('NIM'),
                             TextEntry::make('whatsapp')->label('WhatsApp'),
                             TextEntry::make('angkatan')->label('Angkatan'),
                             TextEntry::make('pilihan1.name')->label('Pilihan 1'),
                             TextEntry::make('pilihan2.name')->label('Pilihan 2'),
                             TextEntry::make('form_timestamp')->label('Waktu Submit')->dateTime(),
+                            TextEntry::make('catatan')->label('Catatan'),
                         ]),
                     ]),
 

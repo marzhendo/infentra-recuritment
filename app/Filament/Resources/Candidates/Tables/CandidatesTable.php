@@ -8,6 +8,8 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -22,10 +24,10 @@ class CandidatesTable
     {
         return $table
             ->columns([
-                TextColumn::make('name')
+                TextColumn::make('display_name')
                     ->label('Nama Lengkap')
-                    ->searchable()
-                    ->sortable()
+                    ->searchable(['name', 'name_override'])
+                    ->sortable(['name'])
                     ->description(fn (Candidate $record) => self::getBadges($record)),
                 TextColumn::make('angkatan')
                     ->label('Angkatan')
@@ -48,6 +50,10 @@ class CandidatesTable
                     ->label('Duplikat')
                     ->boolean()
                     ->sortable(),
+                TextColumn::make('catatan')
+                    ->label('Catatan')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->searchable(),
             ])
             ->filters([
                 SelectFilter::make('division')
@@ -79,6 +85,24 @@ class CandidatesTable
             ])
             ->recordActions([
                 ViewAction::make(),
+                Action::make('ubah_nama')
+                    ->label('Ubah Nama')
+                    ->icon('heroicon-o-pencil')
+                    ->form([
+                        TextInput::make('name_override')
+                            ->label('Nama Override (Kosongkan untuk kembali ke awal)')
+                            ->nullable(),
+                    ])
+                    ->action(fn (Candidate $record, array $data) => $record->update(['name_override' => $data['name_override']])),
+                Action::make('catatan_action')
+                    ->label('Catatan')
+                    ->icon('heroicon-o-document-text')
+                    ->form([
+                        Textarea::make('catatan')
+                            ->label('Catatan')
+                            ->nullable(),
+                    ])
+                    ->action(fn (Candidate $record, array $data) => $record->update(['catatan' => $data['catatan']])),
                 Action::make('tandai_hmif')
                     ->label('Tandai HMIF')
                     ->icon('heroicon-o-check-circle')

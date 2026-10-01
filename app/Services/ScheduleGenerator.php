@@ -128,8 +128,10 @@ class ScheduleGenerator
 
             $day->update(['ends_at' => $lastEnd]);
 
+            $totalSessions = InterviewSlot::where('interview_day_id', $day->id)->count();
+
             $reports[$day->date->format('Y-m-d')] = [
-                'sessions' => $sessions,
+                'sessions' => $totalSessions,
                 'first_start' => $firstStart,
                 'estimated_finish' => $lastEnd,
                 'left_over' => max(0, $slotsForThisDay - $sessions),

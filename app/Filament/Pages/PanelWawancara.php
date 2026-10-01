@@ -62,9 +62,11 @@ class PanelWawancara extends Page implements HasForms, HasTable
                 TextColumn::make('starts_at')
                     ->label('Waktu')
                     ->formatStateUsing(fn ($record) => substr($record->starts_at, 0, 5)),
-                TextColumn::make('candidate.name')
+                TextColumn::make('candidate.display_name')
                     ->label('Kandidat')
                     ->description(fn ($record) => ($record->candidate->pilihan1->name ?? '-').' / '.($record->candidate->pilihan2->name ?? '-')),
+                TextColumn::make('candidate.catatan')
+                    ->label('Catatan'),
                 TextColumn::make('status')
                     ->label('Status')
                     ->badge()
@@ -99,7 +101,7 @@ class PanelWawancara extends Page implements HasForms, HasTable
                     ->label('Nilai')
                     ->icon('heroicon-o-pencil-square')
                     ->hidden(fn ($record) => ! auth()->user()->can('create', [Score::class, $record]))
-                    ->modalHeading(fn ($record) => 'Nilai Kandidat: '.$record->candidate->name)
+                    ->modalHeading(fn ($record) => 'Nilai Kandidat: '.$record->candidate->display_name)
                     ->modalSubmitActionLabel('Simpan')
                     ->form(function ($record) {
                         $activeAspects = DB::table('rubric_aspects')->where('is_active', true)->get();
