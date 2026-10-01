@@ -96,7 +96,7 @@ class PanelWawancara extends Page implements HasForms, HasTable
                     ->default(fn () => $this->selectedDay),
             ])
             ->recordAction('score')
-            ->actions([
+            ->recordActions([
                 Action::make('score')
                     ->label('Nilai')
                     ->icon('heroicon-o-pencil-square')

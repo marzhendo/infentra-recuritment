@@ -107,4 +107,26 @@ class AuthTest extends TestCase
 
     // Roles other than admin/koor are currently impossible due to Enum casting,
     // but the logic in Login.php explicitly checks for 'admin' and 'koor'.
+
+    public function test_login_dropdown_only_shows_groups_with_users()
+    {
+        $divWithKoor = \App\Models\Division::factory()->create(['name' => 'Div With Koor']);
+        $divNoKoor = \App\Models\Division::factory()->create(['name' => 'Div No Koor']);
+        
+        \App\Models\User::factory()->create([
+            'jabatan' => 'Ketua Pelaksana',
+            'division_id' => null,
+        ]);
+        \App\Models\User::factory()->create([
+            'division_id' => $divWithKoor->id,
+            'jabatan' => 'Koordinator',
+        ]);
+        
+        \Livewire\Livewire::test(\App\Filament\Pages\Auth\Login::class)
+            ->assertSeeHtml('Pimpinan (Ketua, SC, PIC)')
+            ->assertSeeHtml('Koor Div With Koor')
+            ->assertDontSeeHtml('Sekretaris')
+            ->assertDontSeeHtml('Bendahara')
+            ->assertDontSeeHtml('Koor Div No Koor');
+    }
 }

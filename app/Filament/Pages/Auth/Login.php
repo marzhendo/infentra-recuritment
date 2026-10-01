@@ -38,12 +38,18 @@ class Login extends BaseLogin
                 Select::make('group')
                     ->label('Kelompok')
                     ->options(function () {
-                        $options = [
-                            'Pimpinan' => 'Pimpinan (Ketua, SC, PIC)',
-                            'Sekretaris' => 'Sekretaris',
-                            'Bendahara' => 'Bendahara',
-                        ];
-                        $divisions = \App\Models\Division::orderBy('name')->pluck('name', 'id')->toArray();
+                        $options = [];
+                        if (\App\Models\User::whereIn('jabatan', ['Ketua Pelaksana', 'Steering Committee', 'PIC'])->exists()) {
+                            $options['Pimpinan'] = 'Pimpinan (Ketua, SC, PIC)';
+                        }
+                        if (\App\Models\User::whereIn('jabatan', ['Sekretaris Umum', 'Sekretaris Kegiatan'])->exists()) {
+                            $options['Sekretaris'] = 'Sekretaris';
+                        }
+                        if (\App\Models\User::whereIn('jabatan', ['Bendahara Umum', 'Bendahara Kegiatan'])->exists()) {
+                            $options['Bendahara'] = 'Bendahara';
+                        }
+                        
+                        $divisions = \App\Models\Division::whereHas('users')->orderBy('name')->pluck('name', 'id')->toArray();
                         foreach ($divisions as $id => $name) {
                             $options['div_' . $id] = 'Koor ' . $name;
                         }

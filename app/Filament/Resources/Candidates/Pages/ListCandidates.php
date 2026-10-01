@@ -25,10 +25,12 @@ class ListCandidates extends ListRecords
                         ->label('File CSV')
                         ->acceptedFileTypes(['text/csv', 'application/vnd.ms-excel', 'text/plain'])
                         ->required()
-                        ->storeFiles(true),
+                        ->storeFiles(false),
                 ])
                 ->action(function (array $data, CandidateImporter $importer) {
-                    $path = Storage::disk('public')->path($data['csv_file']); // Filament default disk
+                    /** @var \Livewire\Features\SupportFileUploads\TemporaryUploadedFile $file */
+                    $file = is_array($data['csv_file']) ? $data['csv_file'][0] : $data['csv_file'];
+                    $path = $file->getRealPath();
                     $summary = $importer->import($path);
 
                     $msg = "Import selesai. Dibuat: {$summary['created']}, Diperbarui: {$summary['updated']}, Tetap: {$summary['unchanged']}, Dilewati: {$summary['skipped']}.";

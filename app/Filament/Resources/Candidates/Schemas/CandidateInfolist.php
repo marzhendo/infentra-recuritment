@@ -45,12 +45,21 @@ class CandidateInfolist
                     ]),
 
                 Section::make('Semua Data Form Asli')
+                    ->columnSpanFull()
+                    ->collapsed()
                     ->schema([
                         TextEntry::make('form_data')
                             ->label('Data Asli')
-                            ->formatStateUsing(function ($state) {
+                            ->formatStateUsing(function ($record) {
+                                $state = $record->form_data;
                                 if (empty($state)) {
                                     return 'Tidak ada data.';
+                                }
+                                if (is_string($state)) {
+                                    $state = json_decode($state, true) ?? [];
+                                }
+                                if (!is_array($state)) {
+                                    $state = (array) $state;
                                 }
                                 $out = [];
                                 foreach ($state as $key => $val) {
@@ -66,6 +75,7 @@ class CandidateInfolist
                     ]),
 
                 Section::make('Keputusan')
+                    ->columnSpanFull()
                     ->schema([
                         Grid::make(2)->schema([
                             self::decisionEntry(1),
@@ -74,6 +84,7 @@ class CandidateInfolist
                     ]),
 
                 Section::make('Penempatan')
+                    ->columnSpanFull()
                     ->visible(fn () => auth()->user()->is_head_interviewer)
                     ->description(function ($record) {
                         $suggester = new PlacementSuggester;
@@ -91,6 +102,7 @@ class CandidateInfolist
                             ->suffixAction(
                                 Action::make('set_placement')
                                     ->label('Atur Penempatan')
+                                    ->icon('heroicon-o-pencil')
                                     ->form([
                                         Select::make('division_id')
                                             ->label('Divisi')
@@ -147,19 +159,35 @@ class CandidateInfolist
                     return 'Belum ada keputusan';
                 }
 
-                return $dec->status->value.($dec->note ? " - {$dec->note}" : '');
+                return match ($dec->status) {
+                    DecisionStatus::Lolos => 'Lolos',
+                    DecisionStatus::TidakLolos => 'Tidak Lolos',
+                    DecisionStatus::Cadangan => 'Cadangan',
+                    default => 'Tidak diketahui',
+                };
+            })
+            ->helperText(function ($record) use ($pilihan) {
+                $divId = $pilihan === 1 ? $record->pilihan_1_id : $record->pilihan_2_id;
+                $dec = Decision::where('candidate_id', $record->id)->where('division_id', $divId)->first();
+                return $dec?->note;
+            })
+            ->badge()
+            ->color(fn ($state) => match ($state) {
+                'Lolos' => 'success',
+                'Tidak Lolos' => 'danger',
+                'Cadangan' => 'warning',
+                default => 'gray',
             })
             ->suffixAction(
                 Action::make("set_decision_{$pilihan}")
-                    ->label('Ubah')
+                    ->label('Isi Keputusan')
+                    ->icon('heroicon-o-pencil')
                     ->visible(function ($record) use ($pilihan) {
                         $divId = $pilihan === 1 ? $record->pilihan_1_id : $record->pilihan_2_id;
                         if (! $divId) {
                             return false;
                         }
-                        $div = Division::find($divId);
-
-                        return auth()->user()->can('create', [Decision::class, $record, $div]);
+                        return auth()->user()->division_id === $divId;
                     })
                     ->form([
                         Select::make('status')
