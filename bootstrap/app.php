@@ -13,14 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(at: '*');
-        
-        $middleware->append(function (Request $request, \Closure $next) {
-            $response = $next($request);
-            if (method_exists($response, 'header')) {
-                $response->header('X-Robots-Tag', 'noindex, nofollow');
-            }
-            return $response;
-        });
+        $middleware->append(\App\Http\Middleware\NoIndexMiddleware::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
