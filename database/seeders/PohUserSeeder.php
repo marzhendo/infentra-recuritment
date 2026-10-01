@@ -12,16 +12,23 @@ class PohUserSeeder extends Seeder
     public function run(): void
     {
         $path = database_path('seeders/data/poh.csv');
-        if (! File::exists($path)) {
-            $this->command->warn('File seeders/data/poh.csv is missing. Skipping PohUserSeeder.');
-
+        
+        if (File::exists($path)) {
+            $csvContent = File::get($path);
+        } elseif (env('POH_CSV_BASE64')) {
+            $csvContent = base64_decode(env('POH_CSV_BASE64'));
+        } else {
+            $this->command->warn('File seeders/data/poh.csv is missing and POH_CSV_BASE64 env is not set. Skipping PohUserSeeder.');
             return;
         }
 
-        $file = fopen($path, 'r');
-        $headers = fgetcsv($file);
+        $lines = explode("\n", str_replace("\r", "", trim($csvContent)));
+        if (count($lines) < 2) return;
+        
+        $headers = str_getcsv(array_shift($lines));
 
-        while (($row = fgetcsv($file)) !== false) {
+        foreach ($lines as $line) {
+            $row = str_getcsv($line);
             if (count($headers) !== count($row)) {
                 continue;
             }
@@ -47,6 +54,5 @@ class PohUserSeeder extends Seeder
                 ]
             );
         }
-        fclose($file);
     }
 }

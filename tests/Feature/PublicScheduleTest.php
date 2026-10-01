@@ -31,7 +31,7 @@ class PublicScheduleTest extends TestCase
             ->assertSet('results', []);
     }
 
-    public function test_search_matches_display_name_and_shows_no_sensitive_data()
+    public function test_case_insensitive_search_matches_display_name_and_shows_no_sensitive_data()
     {
         $candidate = Candidate::factory()->create([
             'name' => 'JOHN DOE',

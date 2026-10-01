@@ -164,7 +164,7 @@ class CandidatesTable
 
         // Count others with same normalized name
         $dupCount = Candidate::where('id', '!=', $record->id)
-            ->whereRaw('LOWER(TRIM(REPLACE(name, "  ", " "))) = ?', [$normalizedName])
+            ->whereRaw("LOWER(TRIM(REPLACE(name, '  ', ' '))) = ?", [$normalizedName])
             ->count();
 
         if ($dupCount > 0) {

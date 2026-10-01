@@ -93,20 +93,8 @@ class Login extends BaseLogin
                 TextInput::make('password_nim')
                     ->label('Kata Sandi')
                     ->password()
-                    ->required(function (Get $get) {
-                        if ($get('login_method') !== 'nim') return false;
-                        $userId = $get('user_id');
-                        if (!$userId) return false;
-                        $user = User::find($userId);
-                        return $user && !empty($user->password);
-                    })
-                    ->visible(function (Get $get) {
-                        if ($get('login_method') !== 'nim') return false;
-                        $userId = $get('user_id');
-                        if (!$userId) return false;
-                        $user = User::find($userId);
-                        return $user && !empty($user->password);
-                    }),
+                    ->required(fn (Get $get) => $get('login_method') === 'nim')
+                    ->visible(fn (Get $get) => $get('login_method') === 'nim'),
 
                 TextInput::make('email')
                     ->label('Email')
@@ -142,16 +130,9 @@ class Login extends BaseLogin
         if ($data['login_method'] === 'nim') {
             $user = User::where('id', $data['user_id'])->where('nim', $data['nim'])->first();
             
-            if (!$user) {
+            if (!$user || empty($user->password) || !Hash::check($data['password_nim'], $user->password)) {
                 $this->addError('nim', 'NIM atau kata sandi salah');
                 return null;
-            }
-
-            if (!empty($user->password)) {
-                if (!Hash::check($data['password_nim'], $user->password)) {
-                    $this->addError('nim', 'NIM atau kata sandi salah');
-                    return null;
-                }
             }
         } else {
             $user = User::where('email', $data['email'])->first();
