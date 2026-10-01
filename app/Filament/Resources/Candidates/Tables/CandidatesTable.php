@@ -84,6 +84,7 @@ class CandidatesTable
                     ->falseLabel('Tidak'),
             ])
             ->recordActions([
+                \Filament\Actions\ActionGroup::make([
                 ViewAction::make(),
                 Action::make('ubah_nama')
                     ->label('Ubah Nama')
@@ -125,6 +126,7 @@ class CandidatesTable
                     ->color('danger')
                     ->visible(fn (Candidate $record) => $record->is_duplicate)
                     ->action(fn (Candidate $record) => $record->update(['is_duplicate' => false])),
+                ])
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -172,3 +174,6 @@ class CandidatesTable
         return implode(' | ', $badges);
     }
 }
+
+
+

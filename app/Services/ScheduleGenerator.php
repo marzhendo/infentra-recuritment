@@ -79,6 +79,12 @@ class ScheduleGenerator
             $firstStart = null;
             $lastEnd = null;
 
+            $lockedSlots = InterviewSlot::where('interview_day_id', $day->id)
+                ->where('is_locked', true)
+                ->get()
+                ->sortBy('starts_at')
+                ->values();
+
             while ($sessions < $slotsForThisDay && $candidateIndex < $totalCandidates) {
                 $candidate = $eligibleCandidates[$candidateIndex];
 
@@ -90,7 +96,6 @@ class ScheduleGenerator
                     $breakStart = Carbon::parse($day->date->format('Y-m-d').' '.$break->starts_at);
                     $breakEnd = (clone $breakStart)->addMinutes($break->duration_minutes);
 
-                    // If current slot overlaps break (starts inside break OR ends after break starts and starts before break ends)
                     if ($currentTime >= $breakStart && $currentTime < $breakEnd) {
                         $currentTime = clone $breakEnd;
                         $jumped = true;
@@ -105,6 +110,27 @@ class ScheduleGenerator
 
                 if ($jumped) {
                     continue; // Re-evaluate with new currentTime
+                }
+
+                // Check against locked slots
+                foreach ($lockedSlots as $lSlot) {
+                    $lStart = Carbon::parse($day->date->format('Y-m-d').' '.$lSlot->starts_at);
+                    $lEnd = Carbon::parse($day->date->format('Y-m-d').' '.$lSlot->ends_at);
+
+                    if ($currentTime >= $lStart && $currentTime < $lEnd) {
+                        $currentTime = clone $lEnd;
+                        $jumped = true;
+                        break;
+                    }
+                    if ($currentTime < $lStart && $slotEndTime > $lStart) {
+                        $currentTime = clone $lEnd;
+                        $jumped = true;
+                        break;
+                    }
+                }
+
+                if ($jumped) {
+                    continue;
                 }
 
                 if ($firstStart === null) {
@@ -126,14 +152,17 @@ class ScheduleGenerator
                 $candidateIndex++;
             }
 
-            $day->update(['ends_at' => $lastEnd]);
+            $trueFirstStart = InterviewSlot::where('interview_day_id', $day->id)->min('starts_at');
+            $trueLastEnd = InterviewSlot::where('interview_day_id', $day->id)->max('ends_at');
+
+            $day->update(['ends_at' => $trueLastEnd]);
 
             $totalSessions = InterviewSlot::where('interview_day_id', $day->id)->count();
 
             $reports[$day->date->format('Y-m-d')] = [
                 'sessions' => $totalSessions,
-                'first_start' => $firstStart,
-                'estimated_finish' => $lastEnd,
+                'first_start' => substr((string)$trueFirstStart, 0, 5),
+                'estimated_finish' => substr((string)$trueLastEnd, 0, 5),
                 'left_over' => max(0, $slotsForThisDay - $sessions),
             ];
         }
@@ -150,3 +179,4 @@ class ScheduleGenerator
         ];
     }
 }
+
