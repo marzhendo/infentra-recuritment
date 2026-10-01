@@ -4,17 +4,16 @@ namespace App\Filament\Resources\Candidates\Tables;
 
 use App\Models\Candidate;
 use App\Models\Division;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\ViewAction;
-use Filament\Tables\Table;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\IconColumn;
-use Filament\Tables\Filters\Filter;
-use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TernaryFilter;
-use Illuminate\Database\Eloquent\Builder;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\ViewAction;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 class CandidatesTable
@@ -45,6 +44,10 @@ class CandidatesTable
                     ->label('HMIF')
                     ->boolean()
                     ->sortable(),
+                IconColumn::make('is_duplicate')
+                    ->label('Duplikat')
+                    ->boolean()
+                    ->sortable(),
             ])
             ->filters([
                 SelectFilter::make('division')
@@ -55,9 +58,10 @@ class CandidatesTable
                             return $query;
                         }
                         $divId = $data['value'];
+
                         return $query->where(function (Builder $q) use ($divId) {
                             $q->where('pilihan_1_id', $divId)
-                              ->orWhere('pilihan_2_id', $divId);
+                                ->orWhere('pilihan_2_id', $divId);
                         });
                     }),
                 SelectFilter::make('angkatan')
@@ -86,6 +90,17 @@ class CandidatesTable
                     ->color('danger')
                     ->visible(fn (Candidate $record) => $record->is_hmif)
                     ->action(fn (Candidate $record) => $record->update(['is_hmif' => false])),
+                Action::make('tandai_duplikat')
+                    ->label('Tandai Duplikat')
+                    ->icon('heroicon-o-document-duplicate')
+                    ->hidden(fn (Candidate $record) => $record->is_duplicate)
+                    ->action(fn (Candidate $record) => $record->update(['is_duplicate' => true])),
+                Action::make('hapus_tanda_duplikat')
+                    ->label('Hapus Tanda Duplikat')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->visible(fn (Candidate $record) => $record->is_duplicate)
+                    ->action(fn (Candidate $record) => $record->update(['is_duplicate' => false])),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -98,6 +113,15 @@ class CandidatesTable
                         ->icon('heroicon-o-x-circle')
                         ->color('danger')
                         ->action(fn (Collection $records) => $records->each->update(['is_hmif' => false])),
+                    BulkAction::make('tandai_duplikat_bulk')
+                        ->label('Tandai Duplikat')
+                        ->icon('heroicon-o-document-duplicate')
+                        ->action(fn (Collection $records) => $records->each->update(['is_duplicate' => true])),
+                    BulkAction::make('hapus_tanda_duplikat_bulk')
+                        ->label('Hapus Tanda Duplikat')
+                        ->icon('heroicon-o-x-circle')
+                        ->color('danger')
+                        ->action(fn (Collection $records) => $records->each->update(['is_duplicate' => false])),
                 ]),
             ]);
     }
@@ -111,12 +135,12 @@ class CandidatesTable
 
         // Possible duplicate: same normalized name
         $normalizedName = strtolower(preg_replace('/\s+/', ' ', trim($record->name)));
-        
+
         // Count others with same normalized name
         $dupCount = Candidate::where('id', '!=', $record->id)
             ->whereRaw('LOWER(TRIM(REPLACE(name, "  ", " "))) = ?', [$normalizedName])
             ->count();
-            
+
         if ($dupCount > 0) {
             $badges[] = 'Possible duplicate';
         }

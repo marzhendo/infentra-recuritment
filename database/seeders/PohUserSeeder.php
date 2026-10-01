@@ -2,19 +2,19 @@
 
 namespace Database\Seeders;
 
+use App\Models\Division;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\File;
-use App\Models\User;
-use App\Models\Division;
-use Illuminate\Support\Str;
 
 class PohUserSeeder extends Seeder
 {
     public function run(): void
     {
         $path = database_path('seeders/data/poh.csv');
-        if (!File::exists($path)) {
-            $this->command->warn("File seeders/data/poh.csv is missing. Skipping PohUserSeeder.");
+        if (! File::exists($path)) {
+            $this->command->warn('File seeders/data/poh.csv is missing. Skipping PohUserSeeder.');
+
             return;
         }
 
@@ -22,11 +22,13 @@ class PohUserSeeder extends Seeder
         $headers = fgetcsv($file);
 
         while (($row = fgetcsv($file)) !== false) {
-            if (count($headers) !== count($row)) continue;
+            if (count($headers) !== count($row)) {
+                continue;
+            }
             $data = array_combine($headers, $row);
 
             $divisionId = null;
-            if (!empty($data['division'])) {
+            if (! empty($data['division'])) {
                 $divisionName = $data['division'];
                 $division = Division::where('name', $divisionName)->orWhereJsonContains('aliases', $divisionName)->first();
                 if ($division) {
@@ -41,6 +43,7 @@ class PohUserSeeder extends Seeder
                     'jabatan' => $data['jabatan'],
                     'role' => $data['role'],
                     'division_id' => $divisionId,
+                    'is_head_interviewer' => $data['jabatan'] === 'Ketua Pelaksana',
                 ]
             );
         }

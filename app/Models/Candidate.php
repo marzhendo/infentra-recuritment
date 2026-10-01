@@ -6,8 +6,8 @@ use App\Enums\CandidateStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Candidate extends Model
 {
@@ -29,6 +29,7 @@ class Candidate extends Model
         'form_data',
         'status',
         'is_hmif',
+        'is_duplicate',
     ];
 
     protected function casts(): array
@@ -36,6 +37,7 @@ class Candidate extends Model
         return [
             'status' => CandidateStatus::class,
             'is_hmif' => 'boolean',
+            'is_duplicate' => 'boolean',
             'form_timestamp' => 'datetime',
             'form_data' => 'array',
         ];

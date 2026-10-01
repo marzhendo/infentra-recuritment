@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Models\Division;
 use App\Enums\CandidateStatus;
+use App\Models\Division;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class CandidateFactory extends Factory
@@ -11,10 +11,10 @@ class CandidateFactory extends Factory
     public function definition(): array
     {
         $name = fake()->name();
-        $whatsapp = '62' . fake()->numerify('812########');
+        $whatsapp = '62'.fake()->numerify('812########');
 
         return [
-            'import_key' => strtolower($name) . '|' . $whatsapp,
+            'import_key' => strtolower($name).'|'.$whatsapp,
             'name' => $name,
             'whatsapp' => $whatsapp,
             'nim' => fake()->numerify('1352####'),
@@ -25,6 +25,7 @@ class CandidateFactory extends Factory
             'form_data' => [],
             'status' => CandidateStatus::Terdaftar,
             'is_hmif' => false,
+            'is_duplicate' => false,
         ];
     }
 }

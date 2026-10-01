@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\InterviewDay;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class InterviewSlotFactory extends Factory
@@ -9,10 +10,10 @@ class InterviewSlotFactory extends Factory
     public function definition(): array
     {
         return [
-            'date' => fake()->date(),
+            'interview_day_id' => InterviewDay::factory(),
             'starts_at' => fake()->time(),
             'ends_at' => fake()->time(),
-            'room' => 'DC-302',
+            'is_locked' => false,
         ];
     }
 }

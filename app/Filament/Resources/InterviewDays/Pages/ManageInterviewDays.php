@@ -29,7 +29,7 @@ class ManageInterviewDays extends ManageRecords
                     $total = Candidate::count();
                     $hmif = Candidate::where('is_hmif', true)->count();
                     $locked = InterviewSlot::where('is_locked', true)->count();
-                    
+
                     // Count duplicates roughly for display
                     $candidates = Candidate::where('is_hmif', false)->get();
                     $names = [];
@@ -37,7 +37,7 @@ class ManageInterviewDays extends ManageRecords
                         $norm = strtolower(preg_replace('/\s+/', ' ', trim($c->name)));
                         $names[$norm] = ($names[$norm] ?? 0) + 1;
                     }
-                    $duplicates = count(array_filter($names, fn($count) => $count > 1));
+                    $duplicates = count(array_filter($names, fn ($count) => $count > 1));
 
                     return new HtmlString("
                         <p>Total kandidat: <strong>{$total}</strong></p>
@@ -49,20 +49,23 @@ class ManageInterviewDays extends ManageRecords
                 })
                 ->action(function () {
                     try {
-                        $generator = new ScheduleGenerator();
+                        $generator = new ScheduleGenerator;
                         $reports = $generator->generate();
-                        
+
                         $lines = [];
-                        foreach ($reports as $date => $rep) {
+                        foreach ($reports['days'] as $date => $rep) {
                             $lines[] = "<strong>{$date}</strong>: {$rep['sessions']} sesi ({$rep['first_start']} - {$rep['estimated_finish']})";
                             if ($rep['left_over'] > 0) {
                                 $lines[] = "<span class='text-danger-600'>Sisa kandidat: {$rep['left_over']}</span>";
                             }
                         }
-                        
+
+                        $lines[] = "<hr><p>Skipped HMIF: {$reports['skipped_hmif']}</p>";
+                        $lines[] = "<p>Skipped Duplicates: {$reports['skipped_duplicate']}</p>";
+
                         Notification::make()
                             ->title('Jadwal Berhasil Dibuat')
-                            ->body(new HtmlString(implode("<br>", $lines)))
+                            ->body(new HtmlString(implode('<br>', $lines)))
                             ->success()
                             ->send();
                     } catch (\Exception $e) {

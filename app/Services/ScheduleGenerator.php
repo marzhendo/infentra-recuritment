@@ -17,7 +17,7 @@ class ScheduleGenerator
             ->join('interview_slots', 'scores.slot_id', '=', 'interview_slots.id')
             ->whereNotNull('interview_slots.interview_day_id')
             ->exists();
-            
+
         if ($hasScores) {
             throw new \Exception('Cannot regenerate schedule because scores already exist.');
         }
@@ -48,22 +48,16 @@ class ScheduleGenerator
             ->pluck('candidate_id')
             ->toArray();
 
+        $skippedHmif = Candidate::where('is_hmif', true)->count();
+        $skippedDuplicate = Candidate::where('is_duplicate', true)->count();
+
         $candidates = Candidate::where('is_hmif', false)
+            ->where('is_duplicate', false)
             ->whereNotIn('id', $lockedCandidateIds)
             ->orderBy('form_timestamp')
             ->get();
-            
-        // Filter out duplicates dynamically
-        $eligibleCandidates = [];
-        $seen = [];
-        foreach ($candidates as $c) {
-            $norm = strtolower(preg_replace('/\s+/', ' ', trim($c->name)));
-            if (isset($seen[$norm])) {
-                continue;
-            }
-            $seen[$norm] = true;
-            $eligibleCandidates[] = $c;
-        }
+
+        $eligibleCandidates = $candidates->all();
 
         // 5. Generate slots for each day
         $totalCandidates = count($eligibleCandidates);
@@ -76,8 +70,8 @@ class ScheduleGenerator
 
         foreach ($days as $dayIndex => $day) {
             $slotsForThisDay = $basePerDay + ($dayIndex < $remainder ? 1 : 0);
-            
-            $currentTime = Carbon::parse($day->date->format('Y-m-d') . ' ' . $day->starts_at);
+
+            $currentTime = Carbon::parse($day->date->format('Y-m-d').' '.$day->starts_at);
             $slotLength = $day->slot_minutes;
             $breaks = $day->breakBlocks->sortBy('starts_at')->values();
 
@@ -90,12 +84,12 @@ class ScheduleGenerator
 
                 // Check against breaks
                 $slotEndTime = (clone $currentTime)->addMinutes($slotLength);
-                
+
                 $jumped = false;
                 foreach ($breaks as $break) {
-                    $breakStart = Carbon::parse($day->date->format('Y-m-d') . ' ' . $break->starts_at);
+                    $breakStart = Carbon::parse($day->date->format('Y-m-d').' '.$break->starts_at);
                     $breakEnd = (clone $breakStart)->addMinutes($break->duration_minutes);
-                    
+
                     // If current slot overlaps break (starts inside break OR ends after break starts and starts before break ends)
                     if ($currentTime >= $breakStart && $currentTime < $breakEnd) {
                         $currentTime = clone $breakEnd;
@@ -108,7 +102,7 @@ class ScheduleGenerator
                         break;
                     }
                 }
-                
+
                 if ($jumped) {
                     continue; // Re-evaluate with new currentTime
                 }
@@ -133,7 +127,7 @@ class ScheduleGenerator
             }
 
             $day->update(['ends_at' => $lastEnd]);
-            
+
             $reports[$day->date->format('Y-m-d')] = [
                 'sessions' => $sessions,
                 'first_start' => $firstStart,
@@ -142,11 +136,15 @@ class ScheduleGenerator
             ];
         }
 
-        // Left overs if any day couldn't fit? We actually just assign until they are done. 
+        // Left overs if any day couldn't fit? We actually just assign until they are done.
         // Wait, the prompt says: "Persist empty slots first, then assign candidates in order, so empty slots exist for manual use."
         // Oh! "Persist empty slots first, then assign candidates in order, so empty slots exist for manual use."
         // Wait, if we just generate slots for the REQUIRED number of candidates, there are NO empty slots.
         // Let me re-read the prompt: "Persist empty slots first, then assign candidates in order, so empty slots exist for manual use."
-        return $reports;
+        return [
+            'days' => $reports,
+            'skipped_hmif' => $skippedHmif,
+            'skipped_duplicate' => $skippedDuplicate,
+        ];
     }
 }
