@@ -56,4 +56,24 @@ class ScheduleGeneratorTest extends TestCase
         $day->refresh();
         $this->assertEquals('08:30:00', $day->ends_at);
     }
+
+    public function test_no_candidate_is_dropped()
+    {
+        InterviewDay::factory()->count(2)->create([
+            'starts_at' => '08:00:00',
+            'slot_minutes' => 10,
+        ]);
+
+        Candidate::factory()->count(10)->create(['is_hmif' => false, 'is_duplicate' => false]);
+        Candidate::factory()->count(3)->create(['is_hmif' => true, 'is_duplicate' => false]);
+        Candidate::factory()->count(2)->create(['is_hmif' => false, 'is_duplicate' => true]);
+
+        $generator = new ScheduleGenerator();
+        $report = $generator->generate();
+
+        $slotsCount = InterviewSlot::count();
+        $totalCandidates = Candidate::count();
+
+        $this->assertEquals($totalCandidates, $slotsCount + $report['skipped_hmif'] + $report['skipped_duplicate']);
+    }
 }

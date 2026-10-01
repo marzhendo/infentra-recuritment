@@ -1,0 +1,170 @@
+<?php
+
+namespace App\Filament\Pages\Auth;
+
+use App\Models\User;
+use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
+use Filament\Actions\Action;
+use Filament\Facades\Filament;
+use Filament\Schemas\Components\Component;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Schema;
+use Filament\Auth\Http\Responses\Contracts\LoginResponse;
+use Filament\Auth\Pages\Login as BaseLogin;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
+use Filament\Schemas\Components\Utilities\Get;
+
+class Login extends BaseLogin
+{
+    public $login_type = 'nim';
+
+    public function form(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                Select::make('login_method')
+                    ->label('Metode Masuk')
+                    ->options([
+                        'nim' => 'Masuk dengan Nama & NIM',
+                        'email' => 'Masuk dengan Email',
+                    ])
+                    ->default('nim')
+                    ->live()
+                    ->required(),
+
+                Select::make('group')
+                    ->label('Kelompok')
+                    ->options(function () {
+                        $options = [
+                            'Pimpinan' => 'Pimpinan (Ketua, SC, PIC)',
+                            'Sekretaris' => 'Sekretaris',
+                            'Bendahara' => 'Bendahara',
+                        ];
+                        $divisions = \App\Models\Division::orderBy('name')->pluck('name', 'id')->toArray();
+                        foreach ($divisions as $id => $name) {
+                            $options['div_' . $id] = 'Koor ' . $name;
+                        }
+                        return $options;
+                    })
+                    ->live()
+                    ->afterStateUpdated(fn ($set) => $set('user_id', null))
+                    ->required(fn (Get $get) => $get('login_method') === 'nim')
+                    ->visible(fn (Get $get) => $get('login_method') === 'nim'),
+
+                Select::make('user_id')
+                    ->label('Nama')
+                    ->options(function (Get $get) {
+                        $group = $get('group');
+                        if (!$group) return [];
+                        
+                        $query = User::query();
+                        if ($group === 'Pimpinan') {
+                            $query->whereIn('jabatan', ['Ketua Pelaksana', 'Steering Committee', 'PIC']);
+                        } elseif ($group === 'Sekretaris') {
+                            $query->whereIn('jabatan', ['Sekretaris Umum', 'Sekretaris Kegiatan']);
+                        } elseif ($group === 'Bendahara') {
+                            $query->whereIn('jabatan', ['Bendahara Umum', 'Bendahara Kegiatan']);
+                        } elseif (str_starts_with($group, 'div_')) {
+                            $divId = str_replace('div_', '', $group);
+                            $query->where('division_id', $divId);
+                        } else {
+                            return [];
+                        }
+                        return $query->pluck('name', 'id')->toArray();
+                    })
+                    ->live()
+                    ->required(fn (Get $get) => $get('login_method') === 'nim')
+                    ->visible(fn (Get $get) => $get('login_method') === 'nim'),
+
+                TextInput::make('nim')
+                    ->label('NIM')
+                    ->required(fn (Get $get) => $get('login_method') === 'nim')
+                    ->visible(fn (Get $get) => $get('login_method') === 'nim'),
+
+                TextInput::make('password_nim')
+                    ->label('Kata Sandi')
+                    ->password()
+                    ->required(function (Get $get) {
+                        if ($get('login_method') !== 'nim') return false;
+                        $userId = $get('user_id');
+                        if (!$userId) return false;
+                        $user = User::find($userId);
+                        return $user && !empty($user->password);
+                    })
+                    ->visible(function (Get $get) {
+                        if ($get('login_method') !== 'nim') return false;
+                        $userId = $get('user_id');
+                        if (!$userId) return false;
+                        $user = User::find($userId);
+                        return $user && !empty($user->password);
+                    }),
+
+                TextInput::make('email')
+                    ->label('Email')
+                    ->email()
+                    ->required(fn (Get $get) => $get('login_method') === 'email')
+                    ->visible(fn (Get $get) => $get('login_method') === 'email'),
+
+                TextInput::make('password')
+                    ->label('Kata Sandi')
+                    ->password()
+                    ->required(fn (Get $get) => $get('login_method') === 'email')
+                    ->visible(fn (Get $get) => $get('login_method') === 'email'),
+            ])
+            ->statePath('data');
+    }
+
+    public function authenticate(): ?LoginResponse
+    {
+        try {
+            $this->rateLimit(5);
+        } catch (TooManyRequestsException $exception) {
+            $this->addError('nim', __('filament-panels::pages/auth/login.messages.throttled', [
+                'seconds' => $exception->secondsUntilAvailable,
+                'minutes' => ceil($exception->secondsUntilAvailable / 60),
+            ]));
+            
+            return null;
+        }
+
+        $data = $this->form->getState();
+        $user = null;
+
+        if ($data['login_method'] === 'nim') {
+            $user = User::where('id', $data['user_id'])->where('nim', $data['nim'])->first();
+            
+            if (!$user) {
+                $this->addError('nim', 'NIM atau kata sandi salah');
+                return null;
+            }
+
+            if (!empty($user->password)) {
+                if (!Hash::check($data['password_nim'], $user->password)) {
+                    $this->addError('nim', 'NIM atau kata sandi salah');
+                    return null;
+                }
+            }
+        } else {
+            $user = User::where('email', $data['email'])->first();
+            
+            if (!$user || !Hash::check($data['password'], $user->password)) {
+                $this->addError('email', 'NIM atau kata sandi salah');
+                return null;
+            }
+        }
+
+        if (!in_array($user->role->value ?? $user->role, ['admin', 'koor'])) {
+            $this->addError('nim', 'Anda tidak memiliki akses ke panel ini');
+            return null;
+        }
+
+        Filament::auth()->login($user, false); // No remember me
+
+        session()->regenerate();
+
+        return app(LoginResponse::class);
+    }
+}

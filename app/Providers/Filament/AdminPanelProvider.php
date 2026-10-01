@@ -27,7 +27,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login()
+            ->login(\App\Filament\Pages\Auth\Login::class)
             ->colors([
                 'primary' => Color::Amber,
             ])
@@ -57,6 +57,13 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+            ])
+            ->middleware([
+                \App\Http\Middleware\NoIndex::class,
+            ])
+            ->renderHook(
+                \Filament\View\PanelsRenderHook::HEAD_START,
+                fn (): string => '<meta name="robots" content="noindex, nofollow">'
+            );
     }
 }
