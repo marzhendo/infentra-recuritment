@@ -58,13 +58,15 @@ class CandidateImporterTest extends TestCase
         
         $this->assertEquals(2, $result1['created']); // 2 valid unique candidates (Budi Santoso 1, Budi Santoso 2)
         $this->assertEquals(0, $result1['updated']);
+        $this->assertEquals(0, $result1['unchanged']);
         $this->assertEquals(1, $result1['errors_count']); // Citra (UnknownDiv)
         
         // Second run
         $result2 = $importer->import($path);
         
         $this->assertEquals(0, $result2['created']);
-        $this->assertEquals(2, $result2['updated']); // Will "update" but actually same data
+        $this->assertEquals(0, $result2['updated']); // Nothing changed
+        $this->assertEquals(2, $result2['unchanged']); // Both records unchanged
         $this->assertEquals(1, $result2['errors_count']);
     }
 

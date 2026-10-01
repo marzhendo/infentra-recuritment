@@ -35,6 +35,7 @@ class CandidateImporter
         $summary = [
             'created' => 0,
             'updated' => 0,
+            'unchanged' => 0,
             'skipped' => 0,
             'errors_count' => 0,
             'errors' => [],
@@ -109,13 +110,27 @@ class CandidateImporter
                 
                 // Keep previous submissions from existing form_data if they exist
                 $existingPrevious = $candidate->form_data['previous_submissions'] ?? [];
+                
+                $mergedPrevious = [];
+                // Use timestamp as unique key for previous submissions
                 if (isset($formData['previous_submissions'])) {
-                    $formData['previous_submissions'] = array_merge($formData['previous_submissions'], $existingPrevious);
-                } else if (!empty($existingPrevious)) {
-                    $formData['previous_submissions'] = $existingPrevious;
+                    foreach ($formData['previous_submissions'] as $prev) {
+                        $ts = $prev['timestamp'] ?? $prev['Timestamp'] ?? '';
+                        $mergedPrevious[$ts] = $prev;
+                    }
+                }
+                foreach ($existingPrevious as $prev) {
+                    $ts = $prev['timestamp'] ?? $prev['Timestamp'] ?? '';
+                    if (!isset($mergedPrevious[$ts])) {
+                        $mergedPrevious[$ts] = $prev;
+                    }
+                }
+                
+                if (!empty($mergedPrevious)) {
+                    $formData['previous_submissions'] = array_values($mergedPrevious);
                 }
 
-                $candidate->update([
+                $candidate->fill([
                     'name' => $latestRow['nama lengkap'],
                     'whatsapp' => $this->normalizeWhatsapp($latestRow['whatsapp'] ?? ''),
                     'nim' => $finalNim,
@@ -129,7 +144,13 @@ class CandidateImporter
                     'form_timestamp' => $latestTimestamp,
                     'form_data' => $formData,
                 ]);
-                $summary['updated']++;
+
+                if ($candidate->isDirty()) {
+                    $candidate->save();
+                    $summary['updated']++;
+                } else {
+                    $summary['unchanged']++;
+                }
             } else {
                 Candidate::create([
                     'import_key' => $importKey,

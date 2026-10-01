@@ -31,7 +31,7 @@ class ListCandidates extends ListRecords
                     $path = Storage::disk('public')->path($data['csv_file']); // Filament default disk
                     $summary = $importer->import($path);
 
-                    $msg = "Import selesai. Dibuat: {$summary['created']}, Diperbarui: {$summary['updated']}, Dilewati: {$summary['skipped']}.";
+                    $msg = "Import selesai. Dibuat: {$summary['created']}, Diperbarui: {$summary['updated']}, Tetap: {$summary['unchanged']}, Dilewati: {$summary['skipped']}.";
                     if ($summary['errors_count'] > 0) {
                         $msg .= "\nError: " . implode("\n", $summary['errors']);
                     }

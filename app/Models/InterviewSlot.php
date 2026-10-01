@@ -11,24 +11,20 @@ class InterviewSlot extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'date',
-        'starts_at',
-        'ends_at',
-        'room',
-        'candidate_id',
-    ];
+    protected $guarded = [];
 
-    protected function casts(): array
-    {
-        return [
-            'date' => 'date',
-        ];
-    }
+    protected $casts = [
+        'is_locked' => 'boolean',
+    ];
 
     public function candidate(): BelongsTo
     {
         return $this->belongsTo(Candidate::class);
+    }
+    
+    public function interviewDay(): BelongsTo
+    {
+        return $this->belongsTo(InterviewDay::class);
     }
 
     public function scores(): HasMany

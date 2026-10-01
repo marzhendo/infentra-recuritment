@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             DivisionSeeder::class,
             RubricAspectSeeder::class,
             PohUserSeeder::class,
+            InterviewDaySeeder::class,
         ]);
 
         
