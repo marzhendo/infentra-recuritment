@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 
 class ScheduleGenerator
 {
-    public function generate(): array
+    public function generate(string $order = 'chronological'): array
     {
         // 1. Check if any scores exist
         $hasScores = DB::table('scores')
@@ -48,11 +48,15 @@ class ScheduleGenerator
             ->orderBy('form_timestamp')
             ->get();
 
-        $regularCandidates = Candidate::where('is_hmif', false)
+        $regularQuery = Candidate::where('is_hmif', false)
             ->where('is_duplicate', false)
-            ->whereNotIn('id', $lockedCandidateIds)
-            ->orderBy('form_timestamp')
-            ->get();
+            ->whereNotIn('id', $lockedCandidateIds);
+            
+        if ($order === 'random') {
+            $regularCandidates = $regularQuery->inRandomOrder()->get();
+        } else {
+            $regularCandidates = $regularQuery->orderBy('form_timestamp')->get();
+        }
 
         $totalCandidates = $hmifCandidates->count() + $regularCandidates->count();
 

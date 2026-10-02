@@ -46,16 +46,25 @@ class ManageInterviewDays extends ManageRecords
 
                     return new HtmlString("
                         <p>Total kandidat: <strong>{$total}</strong></p>
-                        <p>Dilewati (HMIF): <strong>{$hmif}</strong></p>
                         <p>Dilewati (Duplikat): <strong>{$duplicates}</strong></p>
                         <p>Slot terkunci: <strong>{$locked}</strong></p>
                         <p class='mt-2 text-danger-600'>Aksi ini akan menghapus semua slot yang tidak terkunci dan membuat ulang jadwal.</p>
                     ");
                 })
-                ->action(function () {
+                ->form([
+                    \Filament\Forms\Components\Radio::make('order')
+                        ->label('Metode Pengurutan Kandidat Reguler')
+                        ->options([
+                            'chronological' => 'Sesuai Waktu Pengumpulan Form',
+                            'random' => 'Acak (Random)',
+                        ])
+                        ->default('chronological')
+                        ->required(),
+                ])
+                ->action(function (array $data) {
                     try {
                         $generator = new ScheduleGenerator;
-                        $reports = $generator->generate();
+                        $reports = $generator->generate($data['order'] ?? 'chronological');
 
                         $lines = [];
                         foreach ($reports['days'] as $date => $rep) {
