@@ -20,31 +20,11 @@ class AuthTest extends TestCase
         $response->assertSee('<meta name="robots" content="noindex, nofollow">', false);
     }
 
-    public function test_nim_only_login_success()
+    public function test_nim_only_fails()
     {
         $user = User::factory()->create([
             'nim' => '12345678',
             'password' => null,
-            'role' => 'admin',
-            'jabatan' => 'PIC',
-        ]);
-
-        Livewire::test(\App\Filament\Pages\Auth\Login::class)
-            ->set('data.login_method', 'nim')
-            ->set('data.group', 'Pimpinan')
-            ->set('data.user_id', $user->id)
-            ->set('data.nim', '12345678')
-            ->call('authenticate')
-            ->assertHasNoErrors();
-
-        $this->assertAuthenticatedAs($user);
-    }
-
-    public function test_cannot_login_with_nim_if_password_is_set()
-    {
-        $user = User::factory()->create([
-            'nim' => '12345678',
-            'password' => Hash::make('secret'),
             'role' => 'admin',
             'jabatan' => 'PIC',
         ]);
@@ -60,7 +40,7 @@ class AuthTest extends TestCase
         $this->assertGuest();
     }
 
-    public function test_wrong_nim_gives_generic_error()
+    public function test_nim_and_empty_password_fails()
     {
         $user = User::factory()->create([
             'nim' => '12345678',
@@ -73,14 +53,15 @@ class AuthTest extends TestCase
             ->set('data.login_method', 'nim')
             ->set('data.group', 'Pimpinan')
             ->set('data.user_id', $user->id)
-            ->set('data.nim', '87654321')
+            ->set('data.nim', '12345678')
+            ->set('data.password_nim', '')
             ->call('authenticate')
-            ->assertHasErrors(['nim' => 'NIM atau kata sandi salah']);
+            ->assertHasErrors(['data.password_nim' => 'required']);
 
         $this->assertGuest();
     }
 
-    public function test_rate_limit_triggers()
+    public function test_nim_and_any_password_for_null_password_user_fails()
     {
         $user = User::factory()->create([
             'nim' => '12345678',
@@ -89,11 +70,75 @@ class AuthTest extends TestCase
             'jabatan' => 'PIC',
         ]);
 
+        Livewire::test(\App\Filament\Pages\Auth\Login::class)
+            ->set('data.login_method', 'nim')
+            ->set('data.group', 'Pimpinan')
+            ->set('data.user_id', $user->id)
+            ->set('data.nim', '12345678')
+            ->set('data.password_nim', 'randompassword')
+            ->call('authenticate')
+            ->assertHasErrors('nim');
+
+        $this->assertGuest();
+    }
+
+    public function test_correct_nim_and_correct_password_succeeds()
+    {
+        $user = User::factory()->create([
+            'nim' => '12345678',
+            'password' => Hash::make('secret123'),
+            'role' => 'admin',
+            'jabatan' => 'PIC',
+        ]);
+
+        Livewire::test(\App\Filament\Pages\Auth\Login::class)
+            ->set('data.login_method', 'nim')
+            ->set('data.group', 'Pimpinan')
+            ->set('data.user_id', $user->id)
+            ->set('data.nim', '12345678')
+            ->set('data.password_nim', 'secret123')
+            ->call('authenticate')
+            ->assertHasNoErrors();
+
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_wrong_nim_gives_generic_error()
+    {
+        $user = User::factory()->create([
+            'nim' => '12345678',
+            'password' => Hash::make('secret123'),
+            'role' => 'admin',
+            'jabatan' => 'PIC',
+        ]);
+
+        Livewire::test(\App\Filament\Pages\Auth\Login::class)
+            ->set('data.login_method', 'nim')
+            ->set('data.group', 'Pimpinan')
+            ->set('data.user_id', $user->id)
+            ->set('data.nim', '87654321')
+            ->set('data.password_nim', 'secret123')
+            ->call('authenticate')
+            ->assertHasErrors(['nim' => 'Nama, NIM, atau kata sandi salah']);
+
+        $this->assertGuest();
+    }
+
+    public function test_rate_limit_triggers()
+    {
+        $user = User::factory()->create([
+            'nim' => '12345678',
+            'password' => Hash::make('secret123'),
+            'role' => 'admin',
+            'jabatan' => 'PIC',
+        ]);
+
         $component = Livewire::test(\App\Filament\Pages\Auth\Login::class)
             ->set('data.login_method', 'nim')
             ->set('data.group', 'Pimpinan')
             ->set('data.user_id', $user->id)
-            ->set('data.nim', 'wrong');
+            ->set('data.nim', 'wrong')
+            ->set('data.password_nim', 'secret123');
 
         for ($i = 0; $i < 5; $i++) {
             $component->call('authenticate');
@@ -104,9 +149,6 @@ class AuthTest extends TestCase
             
         $this->assertStringContainsString('filament-panels::pages/auth/login.messages.throttled', $component->errors()->first('nim'));
     }
-
-    // Roles other than admin/koor are currently impossible due to Enum casting,
-    // but the logic in Login.php explicitly checks for 'admin' and 'koor'.
 
     public function test_login_dropdown_only_shows_groups_with_users()
     {
