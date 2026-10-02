@@ -85,7 +85,7 @@
     @endif
 
     <div class="mt-8 text-center text-xs text-gray-400 space-y-1">
-        <p>Anggota HMIF dibebaskan dari wawancara.</p>
+        
         <p>Terakhir diperbarui: {{ $lastUpdated }}</p>
     </div>
 </div>

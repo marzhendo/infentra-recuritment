@@ -58,7 +58,7 @@ class PublicScheduleTest extends TestCase
             ->assertSee('Istirahat Dzuhur')
             ->assertDontSee('Hidden Jane') // Day 2 is unpublished
             ->assertDontSee('HMIF Student') // HMIF absent
-            ->assertSee('Anggota HMIF dibebaskan dari wawancara')
+            
             ->assertDontSee('12345678'); // Privacy
 
         // Verify JSON response or HTML doesn't leak Candidate ID or NIM
