@@ -20,7 +20,26 @@ class CandidateResource extends Resource
 {
     protected static ?string $model = Candidate::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static ?string $modelLabel = 'Calon Panitia';
+    protected static ?string $pluralModelLabel = 'Calon Panitia';
+    protected static ?string $navigationLabel = 'Calon Panitia';
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
+
+    public static function canCreate(): bool
+    {
+        return filament()->auth()->user()->role?->value === 'admin';
+    }
+
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return filament()->auth()->user()->role?->value === 'admin';
+    }
+
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return filament()->auth()->user()->role?->value === 'admin';
+    }
 
     public static function form(Schema $schema): Schema
     {

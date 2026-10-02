@@ -16,6 +16,11 @@ class ManageInterviewDays extends ManageRecords
 {
     protected static string $resource = InterviewDayResource::class;
 
+    public function getSubheading(): ?string
+    {
+        return 'Atur hari wawancara beserta jam istirahat, lalu generate slot wawancara.';
+    }
+
     protected function getHeaderActions(): array
     {
         return [

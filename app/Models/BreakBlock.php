@@ -15,4 +15,11 @@ class BreakBlock extends Model
     {
         return $this->belongsTo(InterviewDay::class);
     }
+
+    public function getEndsAtAttribute()
+    {
+        return \Carbon\Carbon::parse($this->starts_at)
+            ->addMinutes($this->duration_minutes)
+            ->format('H:i:s');
+    }
 }

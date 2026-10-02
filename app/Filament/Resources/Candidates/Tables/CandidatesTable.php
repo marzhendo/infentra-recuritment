@@ -41,15 +41,19 @@ class CandidatesTable
                 TextColumn::make('status')
                     ->label('Status')
                     ->badge()
-                    ->sortable(),
-                IconColumn::make('is_hmif')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                \Filament\Tables\Columns\ToggleColumn::make('is_hmif')
                     ->label('HMIF')
-                    ->boolean()
                     ->sortable(),
                 IconColumn::make('is_duplicate')
                     ->label('Duplikat')
                     ->boolean()
-                    ->sortable(),
+                    ->trueIcon('heroicon-o-document-duplicate')
+                    ->falseIcon('')
+                    ->trueColor('gray')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('catatan')
                     ->label('Catatan')
                     ->toggleable(isToggledHiddenByDefault: true)
@@ -104,17 +108,6 @@ class CandidatesTable
                             ->nullable(),
                     ])
                     ->action(fn (Candidate $record, array $data) => $record->update(['catatan' => $data['catatan']])),
-                Action::make('tandai_hmif')
-                    ->label('Tandai HMIF')
-                    ->icon('heroicon-o-check-circle')
-                    ->hidden(fn (Candidate $record) => $record->is_hmif)
-                    ->action(fn (Candidate $record) => $record->update(['is_hmif' => true])),
-                Action::make('hapus_tanda_hmif')
-                    ->label('Hapus Tanda HMIF')
-                    ->icon('heroicon-o-x-circle')
-                    ->color('danger')
-                    ->visible(fn (Candidate $record) => $record->is_hmif)
-                    ->action(fn (Candidate $record) => $record->update(['is_hmif' => false])),
                 Action::make('tandai_duplikat')
                     ->label('Tandai Duplikat')
                     ->icon('heroicon-o-document-duplicate')

@@ -15,17 +15,25 @@ use Filament\Schemas\Components\DatePicker;
 use Filament\Schemas\Components\TimePicker;
 use Filament\Schemas\Components\TextInput;
 use Filament\Schemas\Components\Repeater;
+use Filament\Schemas\Components\Toggle;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
 
 class InterviewDayResource extends Resource
 {
     protected static ?string $model = InterviewDay::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendar;
-    protected static ?string $modelLabel = 'Hari Wawancara';
-    protected static ?string $pluralModelLabel = 'Hari Wawancara';
+    protected static ?string $modelLabel = 'Jadwal (Hari)';
+    protected static ?string $pluralModelLabel = 'Jadwal';
+    protected static ?string $navigationLabel = 'Jadwal';
+
+    public static function canViewAny(): bool
+    {
+        return filament()->auth()->user()->role?->value === 'admin';
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -66,7 +74,10 @@ class InterviewDayResource extends Resource
                             ->required(),
                     ])
                     ->columns(3)
-                    ->columnSpanFull()
+                    ->columnSpanFull(),
+                Toggle::make('is_published')
+                    ->label('Publikasikan jadwal')
+                    ->default(false),
             ]);
     }
 
@@ -75,6 +86,7 @@ class InterviewDayResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('date')->label('Tanggal')->date(),
+                ToggleColumn::make('is_published')->label('Publikasi'),
                 TextColumn::make('starts_at')->label('Mulai')->time('H:i'),
                 TextColumn::make('room')->label('Ruangan'),
                 TextColumn::make('slot_minutes')->label('Slot (m)'),

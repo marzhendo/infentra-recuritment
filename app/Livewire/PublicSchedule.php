@@ -2,75 +2,73 @@
 
 namespace App\Livewire;
 
-use App\Models\Candidate;
+use App\Models\InterviewDay;
 use Livewire\Component;
-use Livewire\Attributes\Url;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 
 class PublicSchedule extends Component
 {
-    #[Url]
-    public $search = '';
-
-    public function updatedSearch()
-    {
-        $this->validateRateLimit();
-    }
-
-    protected function validateRateLimit()
+    public function mount()
     {
         $key = 'public-schedule:' . request()->ip();
 
-        if (RateLimiter::tooManyAttempts($key, 30)) {
+        if (RateLimiter::tooManyAttempts($key, 60)) {
             $seconds = RateLimiter::availableIn($key);
-            throw ValidationException::withMessages([
-                'search' => "Terlalu banyak permintaan. Silakan coba lagi dalam $seconds detik."
-            ]);
+            abort(429, "Terlalu banyak permintaan. Silakan coba lagi dalam $seconds detik.");
         }
 
         RateLimiter::hit($key, 60);
     }
 
-    public function getResultsProperty()
+    public function getDaysProperty()
     {
-        if (strlen($this->search) < 3) {
-            return [];
-        }
+        return Cache::remember('public_schedule_days', 60, function () {
+            return InterviewDay::with(['interviewSlots.candidate', 'breakBlocks'])
+                ->where('is_published', true)
+                ->orderBy('date')
+                ->get()
+                ->map(function ($day) {
+                    $items = collect();
 
-        return Candidate::query()
-            ->with(['slot.interviewDay'])
-            ->whereRaw('lower(name) like ?', ['%' . strtolower($this->search) . '%'])
-            ->orWhereRaw('lower(name_override) like ?', ['%' . strtolower($this->search) . '%'])
-            ->limit(10)
-            ->get()
-            ->map(function ($candidate) {
-                if ($candidate->is_hmif) {
-                    $status = 'Dibebaskan dari wawancara';
-                    $room = '-';
-                    $time = '-';
-                } elseif ($candidate->slot) {
-                    $slot = $candidate->slot;
-                    $status = \Carbon\Carbon::parse($slot->interviewDay->date)->format('d M Y');
-                    $time = substr($slot->starts_at, 0, 5) . ' - ' . substr($slot->ends_at, 0, 5);
-                    $room = 'Ruang Wawancara DC-302';
-                } else {
-                    $status = 'Belum dijadwalkan';
-                    $room = '-';
-                    $time = '-';
-                }
+                    foreach ($day->interviewSlots as $slot) {
+                        if ($slot->candidate && !$slot->candidate->is_hmif) {
+                            $items->push([
+                                'type' => 'slot',
+                                'starts_at' => substr($slot->starts_at, 0, 5),
+                                'ends_at' => substr($slot->ends_at, 0, 5),
+                                'sort_time' => $slot->starts_at,
+                                'display_name' => $slot->candidate->display_name,
+                            ]);
+                        }
+                    }
 
-                return [
-                    'name' => $candidate->display_name,
-                    'status' => $status,
-                    'time' => $time,
-                    'room' => $room,
-                ];
-            });
+                    foreach ($day->breakBlocks as $break) {
+                        $items->push([
+                            'type' => 'break',
+                            'starts_at' => substr($break->starts_at, 0, 5),
+                            'ends_at' => substr($break->ends_at, 0, 5),
+                            'sort_time' => $break->starts_at,
+                            'title' => $break->label,
+                        ]);
+                    }
+
+                    return [
+                        'id' => $day->id,
+                        'date' => \Carbon\Carbon::parse($day->date)->translatedFormat('l, d F Y'),
+                        'raw_date' => $day->date,
+                        'items' => $items->sortBy('sort_time')->values()->all(),
+                    ];
+                });
+        });
     }
 
     public function render()
     {
-        return view('livewire.public-schedule')->layout('layouts.app');
+        return view('livewire.public-schedule', [
+            'days' => $this->days,
+            'lastUpdated' => now()->timezone('Asia/Jakarta')->translatedFormat('H:i'),
+        ])->layout('layouts.app');
     }
 }

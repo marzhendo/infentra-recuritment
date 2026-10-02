@@ -14,12 +14,19 @@ class ListCandidates extends ListRecords
 {
     protected static string $resource = CandidateResource::class;
 
+    public function getSubheading(): ?string
+    {
+        return 'Kelola data calon panitia, tandai HMIF/duplikat, dan impor data baru (untuk Admin).';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
             Action::make('import')
-                ->label('Import CSV')
+                ->label('Impor data dari CSV')
                 ->icon('heroicon-o-arrow-up-tray')
+                ->modalDescription('Pastikan file CSV berasal dari Google Form INFENTRA tanpa mengubah strukturnya.')
+                ->visible(fn () => filament()->auth()->user()->role?->value === 'admin')
                 ->form([
                     FileUpload::make('csv_file')
                         ->label('File CSV')

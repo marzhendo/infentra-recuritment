@@ -21,8 +21,9 @@ class InterviewSlotResource extends Resource
     protected static ?string $model = InterviewSlot::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClock;
-    protected static ?string $modelLabel = 'Slot Wawancara';
-    protected static ?string $pluralModelLabel = 'Slot Wawancara';
+    protected static ?string $modelLabel = 'Wawancara';
+    protected static ?string $pluralModelLabel = 'Wawancara';
+    protected static ?string $navigationLabel = 'Wawancara';
 
     public static function form(Schema $schema): Schema
     {
@@ -38,13 +39,15 @@ class InterviewSlotResource extends Resource
             ->defaultSort('starts_at')
             ->defaultGroup('interviewDay.date')
             ->groups([
-                Group::make('interviewDay.date')->label('Hari Wawancara'),
+                Group::make('interviewDay.date')
+                    ->label('Hari Wawancara')
+                    ->getTitleFromRecordUsing(fn ($record) => \Carbon\Carbon::parse($record->interviewDay->date)->translatedFormat('l, d F Y')),
             ])
             ->columns([
                 TextColumn::make('starts_at')
                     ->label('Waktu')
                     ->formatStateUsing(fn($record) => substr($record->starts_at, 0, 5) . ' - ' . substr($record->ends_at, 0, 5)),
-                TextColumn::make('candidate.name')
+                TextColumn::make('candidate.display_name')
                     ->label('Kandidat')
                     ->searchable()
                     ->placeholder('Kosong'),
@@ -54,13 +57,90 @@ class InterviewSlotResource extends Resource
                     ->label('Pilihan 2'),
                 IconColumn::make('is_locked')
                     ->label('Terkunci')
-                    ->boolean(),
+                    ->boolean()
+                    ->trueIcon('heroicon-o-lock-closed')
+                    ->falseIcon('')
+                    ->trueColor('warning'),
             ])
+            ->recordClasses(function (InterviewSlot $record) {
+                static $highlightId = null;
+                if ($highlightId === null) {
+                    $now = \Carbon\Carbon::now('Asia/Jakarta');
+                    $time = $now->format('H:i:s');
+                    $date = $now->toDateString();
+                    
+                    // Current slot
+                    $current = InterviewSlot::whereHas('interviewDay', fn($q) => $q->where('date', $date))
+                        ->where('starts_at', '<=', $time)
+                        ->where('ends_at', '>=', $time)
+                        ->first();
+                        
+                    if ($current) {
+                        $highlightId = $current->id;
+                    } else {
+                        // Next slot
+                        $next = InterviewSlot::whereHas('interviewDay', fn($q) => $q->where('date', $date))
+                            ->where('starts_at', '>', $time)
+                            ->orderBy('starts_at')
+                            ->first();
+                        $highlightId = $next ? $next->id : false;
+                    }
+                }
+                
+                return $record->id === $highlightId ? 'bg-primary-50 dark:bg-primary-900/20 ring-1 ring-primary-500' : null;
+            })
             ->filters([
-                //
+                \Filament\Tables\Filters\SelectFilter::make('interview_day_id')
+                    ->label('Hari Wawancara')
+                    ->options(fn () => \App\Models\InterviewDay::pluck('date', 'id')->map(fn ($d) => \Carbon\Carbon::parse($d)->translatedFormat('l, d F Y'))->toArray())
+                    ->default(function () {
+                        $today = \Carbon\Carbon::now('Asia/Jakarta')->toDateString();
+                        $day = \App\Models\InterviewDay::where('date', $today)->first();
+                        return $day ? $day->id : null;
+                    }),
             ])
             ->recordActions([
-                Action::make('assign')
+                Action::make('nilai')
+                    ->label(function (InterviewSlot $record) {
+                        $user = filament()->auth()->user();
+                        if (!$record->candidate_id) return 'Hanya lihat';
+                        if ($user->role?->value === 'admin' && in_array($user->jabatan, ['Ketua Pelaksana', 'Steering Committee', 'PIC'])) return 'Nilai';
+                        if ($user->role?->value === 'koor') {
+                            $divId = $user->division_id;
+                            if ($record->candidate->pilihan_1_id === $divId || $record->candidate->pilihan_2_id === $divId) {
+                                return 'Nilai';
+                            }
+                        }
+                        return 'Hanya lihat';
+                    })
+                    ->icon(function (InterviewSlot $record) {
+                        $user = filament()->auth()->user();
+                        if (!$record->candidate_id) return 'heroicon-o-eye';
+                        if ($user->role?->value === 'admin' && in_array($user->jabatan, ['Ketua Pelaksana', 'Steering Committee', 'PIC'])) return 'heroicon-o-pencil-square';
+                        if ($user->role?->value === 'koor') {
+                            $divId = $user->division_id;
+                            if ($record->candidate->pilihan_1_id === $divId || $record->candidate->pilihan_2_id === $divId) {
+                                return 'heroicon-o-pencil-square';
+                            }
+                        }
+                        return 'heroicon-o-eye';
+                    })
+                    ->color(function (InterviewSlot $record) {
+                        $user = filament()->auth()->user();
+                        if (!$record->candidate_id) return 'gray';
+                        if ($user->role?->value === 'admin' && in_array($user->jabatan, ['Ketua Pelaksana', 'Steering Committee', 'PIC'])) return 'primary';
+                        if ($user->role?->value === 'koor') {
+                            $divId = $user->division_id;
+                            if ($record->candidate->pilihan_1_id === $divId || $record->candidate->pilihan_2_id === $divId) {
+                                return 'primary';
+                            }
+                        }
+                        return 'gray';
+                    })
+                    ->url(fn (InterviewSlot $record) => $record->candidate_id ? "/admin/candidates/{$record->candidate_id}" : null)
+                    ->disabled(fn (InterviewSlot $record) => !$record->candidate_id),
+                \Filament\Actions\ActionGroup::make([
+                    Action::make('assign')
                     ->label('Pilih Kandidat')
                     ->icon('heroicon-o-user-plus')
                     ->form([
@@ -123,6 +203,7 @@ class InterviewSlotResource extends Resource
                         $record->update(['candidate_id' => $target->candidate_id]);
                         $target->update(['candidate_id' => $temp]);
                     }),
+                ]),
             ]);
     }
 

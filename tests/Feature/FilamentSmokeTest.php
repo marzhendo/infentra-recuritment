@@ -48,8 +48,13 @@ class FilamentSmokeTest extends TestCase
                 ->assertSuccessful();
 
             // Render Interview Days
-            Livewire::test(\App\Filament\Resources\InterviewDays\Pages\ManageInterviewDays::class)
-                ->assertSuccessful();
+            if ($user->role?->value === 'admin') {
+                Livewire::test(\App\Filament\Resources\InterviewDays\Pages\ManageInterviewDays::class)
+                    ->assertSuccessful();
+            } else {
+                Livewire::test(\App\Filament\Resources\InterviewDays\Pages\ManageInterviewDays::class)
+                    ->assertForbidden();
+            }
 
             // Render Panel Wawancara
             $panel = Livewire::test(\App\Filament\Pages\PanelWawancara::class)

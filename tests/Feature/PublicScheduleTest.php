@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Candidate;
 use App\Models\InterviewDay;
 use App\Models\InterviewSlot;
+use App\Models\BreakBlock;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Livewire;
@@ -22,81 +23,52 @@ class PublicScheduleTest extends TestCase
         $response->assertSee('<meta name="robots" content="noindex, nofollow">', false);
     }
 
-    public function test_less_than_3_chars_returns_no_results()
+    public function test_public_schedule_logic()
     {
-        Candidate::factory()->create(['name' => 'John Doe']);
+        $day1 = InterviewDay::factory()->create(['date' => '2026-10-03', 'is_published' => true]);
+        $day2 = InterviewDay::factory()->create(['date' => '2026-10-04', 'is_published' => false]);
 
-        Livewire::test(\App\Livewire\PublicSchedule::class)
-            ->set('search', 'Jo')
-            ->assertSet('results', []);
-    }
+        $hmifCandidate = Candidate::factory()->create(['name' => 'HMIF Student', 'is_hmif' => true]);
+        $normalCandidate = Candidate::factory()->create(['name' => 'John Doe', 'nim' => '12345678']);
+        $hiddenCandidate = Candidate::factory()->create(['name' => 'Hidden Jane']);
 
-    public function test_case_insensitive_search_matches_display_name_and_shows_no_sensitive_data()
-    {
-        $candidate = Candidate::factory()->create([
-            'name' => 'JOHN DOE',
-            'nim' => '12345678',
-            'whatsapp' => '08123456789',
-        ]);
-        
-        $day = InterviewDay::factory()->create(['date' => '2026-10-03']);
-        $slot = InterviewSlot::factory()->create([
-            'candidate_id' => $candidate->id,
-            'interview_day_id' => $day->id,
+        $slot1 = InterviewSlot::factory()->create([
+            'candidate_id' => $normalCandidate->id,
+            'interview_day_id' => $day1->id,
             'starts_at' => '10:00:00',
             'ends_at' => '10:10:00',
         ]);
+        $slot2 = InterviewSlot::factory()->create([
+            'candidate_id' => $hiddenCandidate->id,
+            'interview_day_id' => $day2->id,
+            'starts_at' => '11:00:00',
+            'ends_at' => '11:10:00',
+        ]);
+
+        $break = BreakBlock::factory()->create([
+            'interview_day_id' => $day1->id,
+            'label' => 'Istirahat Dzuhur',
+            'starts_at' => '11:45:00',
+            'duration_minutes' => 60,
+        ]);
 
         $component = Livewire::test(\App\Livewire\PublicSchedule::class)
-            ->set('search', 'john')
             ->assertSee('John Doe')
-            ->assertSee('03 Oct 2026')
-            ->assertSee('10:00 - 10:10')
-            ->assertSee('Ruang Wawancara DC-302')
-            ->assertDontSee('12345678')
-            ->assertDontSee('08123456789');
+            ->assertSee('10:00')
+            ->assertSee('Istirahat Dzuhur')
+            ->assertDontSee('Hidden Jane') // Day 2 is unpublished
+            ->assertDontSee('HMIF Student') // HMIF absent
+            ->assertSee('Anggota HMIF dibebaskan dari wawancara')
+            ->assertDontSee('12345678'); // Privacy
+
+        // Verify JSON response or HTML doesn't leak Candidate ID or NIM
+        $html = $component->html();
+        $this->assertStringNotContainsString('12345678', $html);
     }
 
-    public function test_hmif_exemption()
+    public function test_empty_when_nothing_published()
     {
-        $candidate = Candidate::factory()->create([
-            'name' => 'HMIF Student',
-            'is_hmif' => true,
-        ]);
-
         Livewire::test(\App\Livewire\PublicSchedule::class)
-            ->set('search', 'hmi')
-            ->assertSee('HMIF Student')
-            ->assertSee('Dibebaskan dari wawancara')
-            ->assertDontSee('Ruang Wawancara');
-    }
-
-    public function test_no_slot()
-    {
-        $candidate = Candidate::factory()->create([
-            'name' => 'Pending Student',
-        ]);
-
-        Livewire::test(\App\Livewire\PublicSchedule::class)
-            ->set('search', 'pendi')
-            ->assertSee('Pending Student')
-            ->assertSee('Belum dijadwalkan');
-    }
-
-    public function test_rate_limit()
-    {
-        $key = 'public-schedule:127.0.0.1';
-        RateLimiter::clear($key);
-
-        $component = Livewire::test(\App\Livewire\PublicSchedule::class);
-        
-        for ($i = 0; $i < 30; $i++) {
-            $component->set('search', 'test' . $i);
-        }
-
-        $component->set('search', 'test31')
-            ->assertHasErrors(['search']);
-            
-        $this->assertStringContainsString('Terlalu banyak permintaan', $component->errors()->first('search'));
+            ->assertSee('Jadwal belum dipublikasikan');
     }
 }

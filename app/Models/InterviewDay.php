@@ -13,6 +13,7 @@ class InterviewDay extends Model
 
     protected $casts = [
         'date' => 'date',
+        'is_published' => 'boolean',
     ];
 
     public function breakBlocks()
