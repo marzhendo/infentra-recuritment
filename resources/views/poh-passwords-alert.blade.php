@@ -29,18 +29,19 @@
                 </table>
             </div>
 
-            <div style="margin-top: 1rem;">
+            <div style="margin-top: 1rem;" x-data='{
+                passwords: @json($passwords),
+                copyAll(btn) {
+                    let text = "";
+                    this.passwords.forEach(p => text += p.name + ": " + p.password + "\n");
+                    navigator.clipboard.writeText(text);
+                    btn.innerText = "Tersalin!";
+                    setTimeout(() => btn.innerText = "Salin Semua", 2000);
+                }
+            }'>
                 <x-filament::button
                     color="warning"
-                    x-on:click="
-                        let text = '';
-                        @foreach($passwords as $p)
-                            text += '{{ $p['name'] }}: {{ $p['password'] }}\n';
-                        @endforeach
-                        navigator.clipboard.writeText(text);
-                        $el.innerText = 'Tersalin!';
-                        setTimeout(() => $el.innerText = 'Salin Semua', 2000);
-                    "
+                    x-on:click="copyAll($el)"
                 >
                     Salin Semua
                 </x-filament::button>
