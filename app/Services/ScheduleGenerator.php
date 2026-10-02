@@ -22,6 +22,10 @@ class ScheduleGenerator
             throw new \Exception('Cannot regenerate schedule because scores already exist.');
         }
 
+        if (InterviewDay::where('is_published', true)->exists()) {
+            throw new \Exception('Cannot regenerate schedule because there are published interview days.');
+        }
+
         // 2. Fetch all days and break blocks
         $days = InterviewDay::with('breakBlocks')->orderBy('date')->get();
         if ($days->isEmpty()) {

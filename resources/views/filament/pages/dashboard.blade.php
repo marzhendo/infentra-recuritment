@@ -10,15 +10,19 @@
         $slotsCount = \App\Models\InterviewSlot::count();
         $publishedCount = \App\Models\InterviewDay::where('is_published', true)->count();
         
-        // Koor metrics
         $koorPendingCount = 0;
         if (!$isAdmin) {
             $divId = $user->division_id;
-            // Calon yang pilihan 1 atau 2 adalah div ini, yang belum dinilai oleh koor ini (belum ada di table scores)
+            
+            // Koor: check Candidates they need to score (not HMIF, chosen their division, has a slot, but missing complete scores).
+            // For simplicity, we just count candidates where they have no scores at all for that slot.
             $koorPendingCount = \App\Models\Candidate::where(function($q) use ($divId) {
                 $q->where('pilihan_1_id', $divId)->orWhere('pilihan_2_id', $divId);
-            })->where('is_hmif', false)->whereDoesntHave('decisions', function($q) use ($user, $divId) {
-                $q->where('division_id', $divId);
+            })
+            ->where('is_hmif', false)
+            ->whereHas('slot')
+            ->whereDoesntHave('slot.scores', function($q) use ($user) {
+                $q->where('interviewer_id', $user->id);
             })->count();
         }
     @endphp

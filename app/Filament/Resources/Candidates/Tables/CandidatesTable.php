@@ -55,7 +55,7 @@ class CandidatesTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('catatan')
-                    ->label('Catatan')
+                    ->label('Catatan umum')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->searchable(),
             ])
@@ -100,11 +100,11 @@ class CandidatesTable
                     ])
                     ->action(fn (Candidate $record, array $data) => $record->update(['name_override' => $data['name_override']])),
                 Action::make('catatan_action')
-                    ->label('Catatan')
+                    ->label('Catatan umum')
                     ->icon('heroicon-o-document-text')
                     ->form([
                         Textarea::make('catatan')
-                            ->label('Catatan')
+                            ->label('Catatan umum')
                             ->nullable(),
                     ])
                     ->action(fn (Candidate $record, array $data) => $record->update(['catatan' => $data['catatan']])),

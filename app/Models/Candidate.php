@@ -71,6 +71,62 @@ class Candidate extends Model
         return $this->hasOne(Placement::class);
     }
 
+    public function notes(): HasMany
+    {
+        return $this->hasMany(CandidateNote::class);
+    }
+    
+    public function getPrimaryScorerIdsAttribute(): array
+    {
+        $headId = \App\Models\User::where('is_head_interviewer', true)->value('id');
+        
+        $pilihan1KoorId = \App\Models\User::where('division_id', $this->pilihan_1_id)
+            ->where('role', \App\Enums\Role::Koor)
+            ->value('id');
+            
+        $pilihan2KoorId = \App\Models\User::where('division_id', $this->pilihan_2_id)
+            ->where('role', \App\Enums\Role::Koor)
+            ->value('id');
+
+        return array_filter([$headId, $pilihan1KoorId, $pilihan2KoorId]);
+    }
+
+    public function getAveragePrimaryAttribute(): ?float
+    {
+        if (!$this->slot) return null;
+        $primaryIds = $this->primary_scorer_ids;
+        if (empty($primaryIds)) return null;
+
+        $avg = \App\Models\Score::where('slot_id', $this->slot->id)
+            ->whereIn('interviewer_id', $primaryIds)
+            ->avg('value');
+            
+        return $avg !== null ? (float) round($avg, 2) : null;
+    }
+
+    public function getAverageOtherPohAttribute(): ?float
+    {
+        if (!$this->slot) return null;
+        $primaryIds = $this->primary_scorer_ids;
+
+        $query = \App\Models\Score::where('slot_id', $this->slot->id);
+        if (!empty($primaryIds)) {
+            $query->whereNotIn('interviewer_id', $primaryIds);
+        }
+        $avg = $query->avg('value');
+            
+        return $avg !== null ? (float) round($avg, 2) : null;
+    }
+
+    public function getAverageAllAttribute(): ?float
+    {
+        if (!$this->slot) return null;
+
+        $avg = \App\Models\Score::where('slot_id', $this->slot->id)->avg('value');
+            
+        return $avg !== null ? (float) round($avg, 2) : null;
+    }
+
     protected function displayName(): Attribute
     {
         return Attribute::make(

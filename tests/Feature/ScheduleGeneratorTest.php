@@ -224,4 +224,18 @@ class ScheduleGeneratorTest extends TestCase
         $generator = new ScheduleGenerator;
         $generator->generate();
     }
+
+    public function test_published_interview_day_cannot_be_regenerated()
+    {
+        $day = InterviewDay::factory()->create(['is_published' => true]);
+        
+        Candidate::factory()->create(['is_hmif' => false]);
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Cannot regenerate schedule because there are published interview days.');
+
+        $generator = new ScheduleGenerator;
+        $generator->generate();
+    }
 }
+

@@ -32,7 +32,7 @@ class CandidateInfolist
                             TextEntry::make('pilihan1.name')->label('Pilihan 1'),
                             TextEntry::make('pilihan2.name')->label('Pilihan 2'),
                             TextEntry::make('form_timestamp')->label('Waktu Submit')->dateTime(),
-                            TextEntry::make('catatan')->label('Catatan'),
+                            TextEntry::make('catatan')->label('Catatan umum'),
                         ]),
                     ]),
 
@@ -42,6 +42,14 @@ class CandidateInfolist
                         self::fileEntry('Sertifikat WPI', 'file_cert_wpi'),
                         self::fileEntry('CV', 'file_cv'),
                         self::fileEntry('Portofolio', 'file_portfolio'),
+                    ]),
+
+                Section::make('Penilaian dan catatan')
+                    ->columnSpanFull()
+                    ->schema([
+                        \Filament\Infolists\Components\ViewEntry::make('penilaian_dan_catatan')
+                            ->hiddenLabel()
+                            ->view('filament.infolists.components.penilaian-dan-catatan')
                     ]),
 
                 Section::make('Semua Data Form Asli')

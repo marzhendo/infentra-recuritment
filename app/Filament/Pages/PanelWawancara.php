@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\CandidateNote;
 use App\Models\InterviewDay;
 use App\Models\InterviewSlot;
 use App\Models\Score;
@@ -9,8 +10,6 @@ use App\Services\ScoreSubmitter;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Concerns\InteractsWithForms;
-use Filament\Forms\Contracts\HasForms;
 use Filament\Pages\Page;
 use Filament\Actions\Action;
 use Filament\Tables\Columns\TextColumn;
@@ -21,9 +20,9 @@ use Filament\Tables\Table;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 
-class PanelWawancara extends Page implements HasForms, HasTable
+class PanelWawancara extends Page implements HasTable
 {
-    use InteractsWithForms, InteractsWithTable;
+    use InteractsWithTable;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-list';
 
@@ -37,7 +36,7 @@ class PanelWawancara extends Page implements HasForms, HasTable
 
     public function mount()
     {
-        $today = now()->format('Y-m-d');
+        $today = now()->timezone('Asia/Jakarta')->format('Y-m-d');
         $day = InterviewDay::whereDate('date', $today)->first() ?? InterviewDay::orderBy('date')->first();
         if ($day) {
             $this->selectedDay = $day->id;
@@ -47,6 +46,7 @@ class PanelWawancara extends Page implements HasForms, HasTable
     public function table(Table $table): Table
     {
         return $table
+            ->poll('30s')
             ->query(function () {
                 $q = InterviewSlot::with(['candidate.pilihan1', 'candidate.pilihan2'])
                     ->whereNotNull('candidate_id')
@@ -58,6 +58,17 @@ class PanelWawancara extends Page implements HasForms, HasTable
 
                 return $q;
             })
+            ->recordClasses(function ($record) {
+                $now = now()->timezone('Asia/Jakarta');
+                $day = InterviewDay::find($record->interview_day_id);
+                if (!$day) return null;
+                $slotStart = \Carbon\Carbon::parse($day->date->format('Y-m-d') . ' ' . $record->starts_at, 'Asia/Jakarta');
+                $slotEnd = \Carbon\Carbon::parse($day->date->format('Y-m-d') . ' ' . $record->ends_at, 'Asia/Jakarta');
+                if ($now->between($slotStart, $slotEnd)) {
+                    return 'bg-primary-50 dark:bg-primary-900/10 border-l-4 border-primary-600';
+                }
+                return null;
+            })
             ->columns([
                 TextColumn::make('starts_at')
                     ->label('Waktu')
@@ -66,11 +77,14 @@ class PanelWawancara extends Page implements HasForms, HasTable
                     ->label('Kandidat')
                     ->description(fn ($record) => ($record->candidate->pilihan1->name ?? '-').' / '.($record->candidate->pilihan2->name ?? '-')),
                 TextColumn::make('candidate.catatan')
-                    ->label('Catatan'),
+                    ->label('Catatan umum'),
                 TextColumn::make('status')
                     ->label('Status')
                     ->badge()
                     ->getStateUsing(function ($record) {
+                        if ($record->candidate && $record->candidate->is_hmif) {
+                            return 'HMIF (Tanpa Nilai)';
+                        }
                         $submitter = new ScoreSubmitter;
                         $user = auth()->user();
                         $count = Score::where('slot_id', $record->id)->where('interviewer_id', $user->id)->count();
@@ -87,6 +101,7 @@ class PanelWawancara extends Page implements HasForms, HasTable
                         'Belum dinilai' => 'danger',
                         'Sebagian' => 'warning',
                         'Lengkap' => 'success',
+                        'HMIF (Tanpa Nilai)' => 'gray',
                     }),
             ])
             ->filters([
@@ -98,14 +113,16 @@ class PanelWawancara extends Page implements HasForms, HasTable
             ->recordAction('score')
             ->recordActions([
                 Action::make('score')
-                    ->label('Nilai')
-                    ->icon('heroicon-o-pencil-square')
-                    ->hidden(fn ($record) => ! auth()->user()->can('create', [Score::class, $record]))
+                    ->label(fn ($record) => auth()->user()->can('create', [Score::class, $record]) ? 'Nilai' : 'Hanya lihat')
+                    ->icon(fn ($record) => auth()->user()->can('create', [Score::class, $record]) ? 'heroicon-o-pencil-square' : 'heroicon-o-eye')
+                    ->color(fn ($record) => auth()->user()->can('create', [Score::class, $record]) ? 'primary' : 'gray')
                     ->modalHeading(fn ($record) => 'Nilai Kandidat: '.$record->candidate->display_name)
-                    ->modalSubmitActionLabel('Simpan')
+                    ->modalSubmitActionLabel(fn($record) => auth()->user()->can('create', [Score::class, $record]) ? 'Simpan' : 'Tutup')
+                    ->modalCancelAction(fn($action) => $action->hidden())
                     ->form(function ($record) {
                         $activeAspects = DB::table('rubric_aspects')->where('is_active', true)->get();
                         $user = auth()->user();
+                        $canScore = $user->can('create', [Score::class, $record]);
 
                         $components = [];
 
@@ -125,27 +142,54 @@ class PanelWawancara extends Page implements HasForms, HasTable
                                 '<strong>Berkas:</strong> '.implode(', ', $links)
                             ));
 
-                        // Show other interviewers' scores
+                        // Show other interviewers' scores and notes
                         $otherScores = Score::with(['interviewer', 'aspect'])
                             ->where('slot_id', $record->id)
                             ->where('interviewer_id', '!=', $user->id)
                             ->get();
+                            
+                        $otherNotes = CandidateNote::with(['author'])
+                            ->where('candidate_id', $record->candidate_id)
+                            ->where('author_id', '!=', $user->id)
+                            ->get()
+                            ->keyBy('author_id');
 
-                        if ($otherScores->isNotEmpty()) {
-                            $othersHtml = "<ul class='list-disc pl-5'>";
-                            foreach ($otherScores->groupBy('interviewer.name') as $interviewerName => $scores) {
-                                $othersHtml .= "<li><strong>{$interviewerName}:</strong> ";
-                                $scoreParts = [];
-                                foreach ($scores as $s) {
-                                    $scoreParts[] = "{$s->aspect->name} ({$s->value})";
+                        $otherPersons = $otherScores->pluck('interviewer')->merge($otherNotes->pluck('author'))->unique('id');
+
+                        if ($otherPersons->isNotEmpty()) {
+                            $othersHtml = "<div class='space-y-4'>";
+                            foreach ($otherPersons as $person) {
+                                $personScores = $otherScores->where('interviewer_id', $person->id);
+                                $personNote = $otherNotes->get($person->id)?->body;
+                                $avg = $personScores->count() > 0 ? round($personScores->avg('value'), 2) : '-';
+                                
+                                $othersHtml .= "<div class='p-3 bg-gray-50 dark:bg-gray-800 rounded-lg'>";
+                                $othersHtml .= "<div class='flex items-center gap-2 mb-2'>
+                                    <strong>{$person->name}</strong>
+                                    <span class='px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 rounded-full'>{$person->jabatan}</span>
+                                    <span class='ml-auto text-sm'>Rata-rata: <strong>{$avg}</strong></span>
+                                </div>";
+                                
+                                if ($personNote) {
+                                    $othersHtml .= "<p class='text-sm italic mb-2'>\"{$personNote}\"</p>";
                                 }
-                                $othersHtml .= implode(', ', $scoreParts);
-                                $othersHtml .= '</li>';
+                                
+                                if ($personScores->isNotEmpty()) {
+                                    $othersHtml .= "<div class='text-xs text-gray-500'>";
+                                    $scoreParts = [];
+                                    foreach ($personScores as $s) {
+                                        $scoreParts[] = "{$s->aspect->name} ({$s->value})";
+                                    }
+                                    $othersHtml .= implode(', ', $scoreParts);
+                                    $othersHtml .= "</div>";
+                                }
+                                
+                                $othersHtml .= "</div>";
                             }
-                            $othersHtml .= '</ul>';
+                            $othersHtml .= '</div>';
 
                             $components[] = Placeholder::make('other_scores')
-                                ->label('Nilai Pewawancara Lain')
+                                ->label('Penilaian dan catatan lain')
                                 ->content(new HtmlString($othersHtml));
                         }
 
@@ -154,6 +198,10 @@ class PanelWawancara extends Page implements HasForms, HasTable
                             ->where('interviewer_id', $user->id)
                             ->get()
                             ->keyBy('rubric_aspect_id');
+                            
+                        $myNote = CandidateNote::where('candidate_id', $record->candidate_id)
+                            ->where('author_id', $user->id)
+                            ->first();
 
                         foreach ($activeAspects as $aspect) {
                             $components[] = Radio::make("aspect_{$aspect->id}")
@@ -166,13 +214,15 @@ class PanelWawancara extends Page implements HasForms, HasTable
                                     5 => '5 - Sangat Baik',
                                 ])
                                 ->inline()
-                                ->default($myScores->get($aspect->id)?->value);
+                                ->default($myScores->get($aspect->id)?->value)
+                                ->disabled(!$canScore)
+                                ->hidden(!$canScore && !$myScores->has($aspect->id));
                         }
 
-                        // We take the first note found for this user/slot, or empty
                         $components[] = Textarea::make('note')
-                            ->label('Catatan (Opsional)')
-                            ->default($myScores->first()?->note);
+                            ->label('Catatan saya')
+                            ->default($myNote?->body)
+                            ->disabled(!$canScore);
 
                         return $components;
                     })
@@ -186,7 +236,8 @@ class PanelWawancara extends Page implements HasForms, HasTable
                             }
                         }
 
-                        if (count($scores) > 0) {
+                        // we will pass the note explicitly 
+                        if (count($scores) > 0 || !empty($data['note'])) {
                             $submitter->submit($record, auth()->user(), $scores, $data['note'] ?? null);
                         }
                     }),

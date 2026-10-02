@@ -2,26 +2,17 @@
 
 namespace App\Policies;
 
-use App\Models\InterviewSlot;
-use App\Models\Score;
+use App\Models\Candidate;
+use App\Models\CandidateNote;
 use App\Models\User;
 
-class ScorePolicy
+class NotePolicy
 {
     /**
      * Determine whether the user can create models.
      */
-    public function create(User $user, InterviewSlot $slot): bool
+    public function create(User $user, Candidate $candidate): bool
     {
-        $candidate = $slot->candidate;
-        if (! $candidate) {
-            return false;
-        }
-
-        if ($candidate->is_hmif) {
-            return false;
-        }
-
         if ($user->is_head_interviewer || $user->role === \App\Enums\Role::Admin) {
             return true;
         }
@@ -36,8 +27,8 @@ class ScorePolicy
     /**
      * Determine whether the user can update the model.
      */
-    public function update(User $user, Score $score): bool
+    public function update(User $user, CandidateNote $note): bool
     {
-        return $user->id === $score->interviewer_id;
+        return $user->id === $note->author_id;
     }
 }
