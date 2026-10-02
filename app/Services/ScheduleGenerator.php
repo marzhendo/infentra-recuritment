@@ -33,40 +33,36 @@ class ScheduleGenerator
             ->where('is_locked', false)
             ->delete();
 
-        // 4. Fetch eligible candidates (not HMIF, not duplicate)
-        // Wait, "duplicate" means badges "Possible duplicate" logic?
-        // "A candidate with is_hmif = true or is_duplicate = true NEVER gets a slot."
-        // Let's add is_duplicate column? The schema does not have is_duplicate. Let's see: The prompt step A didn't mention adding is_duplicate to the table. Wait! The prompt says "A candidate with is_hmif = true or is_duplicate = true NEVER gets a slot."
-        // Wait, did I add is_duplicate in Candidate model? No, the badge in CandidateResource was dynamic: `Candidate::where('id', '!=', $record->id)->whereRaw('LOWER(TRIM(REPLACE(name, "  ", " "))) = ?', [$normalizedName])->count() > 0`.
-        // Let's implement that logic here for "duplicate". Wait, if a candidate has another candidate with the SAME name, BOTH might be considered duplicates. We should probably only schedule the NEWEST one (which is the only one created anyway because CandidateImporter already handles resubmissions! Ah!)
-        // "Same name, different WhatsApp -> TWO candidates" (this was in the PRD). So they are separate rows. We should skip both? Or just skip the older one? Let's skip both and they must be resolved manually.
-        // I will write a dynamic duplicate check.
-
-        // Get candidates that don't have a locked slot
+        // 4. Fetch eligible candidates (not duplicate)
         $lockedCandidateIds = InterviewSlot::where('is_locked', true)
             ->whereNotNull('candidate_id')
             ->pluck('candidate_id')
             ->toArray();
 
-        $skippedHmif = Candidate::where('is_hmif', true)->count();
         $skippedDuplicate = Candidate::where('is_duplicate', true)->count();
 
-        $candidates = Candidate::where('is_hmif', false)
+        // HMIF candidates are now scheduled!
+        $hmifCandidates = Candidate::where('is_hmif', true)
             ->where('is_duplicate', false)
             ->whereNotIn('id', $lockedCandidateIds)
             ->orderBy('form_timestamp')
             ->get();
 
-        $eligibleCandidates = $candidates->all();
+        $regularCandidates = Candidate::where('is_hmif', false)
+            ->where('is_duplicate', false)
+            ->whereNotIn('id', $lockedCandidateIds)
+            ->orderBy('form_timestamp')
+            ->get();
 
-        // 5. Generate slots for each day
-        $totalCandidates = count($eligibleCandidates);
+        $totalCandidates = $hmifCandidates->count() + $regularCandidates->count();
+
+        // 5. Generate EMPTY slots for each day
         $daysCount = $days->count();
         $basePerDay = floor($totalCandidates / $daysCount);
         $remainder = $totalCandidates % $daysCount;
 
         $reports = [];
-        $candidateIndex = 0;
+        $newSlots = collect();
 
         foreach ($days as $dayIndex => $day) {
             $slotsForThisDay = $basePerDay + ($dayIndex < $remainder ? 1 : 0);
@@ -85,9 +81,7 @@ class ScheduleGenerator
                 ->sortBy('starts_at')
                 ->values();
 
-            while ($sessions < $slotsForThisDay && $candidateIndex < $totalCandidates) {
-                $candidate = $eligibleCandidates[$candidateIndex];
-
+            while ($sessions < $slotsForThisDay) {
                 // Check against breaks
                 $slotEndTime = (clone $currentTime)->addMinutes($slotLength);
 
@@ -133,50 +127,96 @@ class ScheduleGenerator
                     continue;
                 }
 
-                if ($firstStart === null) {
-                    $firstStart = $currentTime->format('H:i:s');
-                }
-
-                // Create slot
-                InterviewSlot::create([
+                // Create empty slot
+                $slot = InterviewSlot::create([
                     'interview_day_id' => $day->id,
-                    'candidate_id' => $candidate->id,
+                    'candidate_id' => null,
                     'starts_at' => $currentTime->format('H:i:s'),
                     'ends_at' => $slotEndTime->format('H:i:s'),
                     'is_locked' => false,
                 ]);
+                $newSlots->push($slot);
 
-                $lastEnd = $slotEndTime->format('H:i:s');
                 $currentTime = clone $slotEndTime;
                 $sessions++;
-                $candidateIndex++;
+            }
+        }
+
+        // 6. Assign HMIF candidates to slots closest to breaks
+        // Calculate distance to nearest break for each new slot
+        $slotsWithDistance = $newSlots->map(function ($slot) use ($days) {
+            $day = $days->firstWhere('id', $slot->interview_day_id);
+            $slotStart = Carbon::parse($day->date->format('Y-m-d').' '.$slot->starts_at);
+            $slotEnd = Carbon::parse($day->date->format('Y-m-d').' '.$slot->ends_at);
+            
+            $minDistance = PHP_INT_MAX;
+            foreach ($day->breakBlocks as $break) {
+                $breakStart = Carbon::parse($day->date->format('Y-m-d').' '.$break->starts_at);
+                $breakEnd = (clone $breakStart)->addMinutes($break->duration_minutes);
+                
+                $distStart = abs($slotEnd->diffInMinutes($breakStart));
+                $distEnd = abs($slotStart->diffInMinutes($breakEnd));
+                
+                $minDistance = min($minDistance, $distStart, $distEnd);
+            }
+            
+            // If no breaks, just use a large distance
+            if ($day->breakBlocks->isEmpty()) {
+                $minDistance = PHP_INT_MAX;
             }
 
+            $slot->break_distance = $minDistance;
+            return $slot;
+        });
+
+        // Sort by distance ascending (closest to break first), then by timestamp
+        $sortedForHmif = $slotsWithDistance->sortBy([
+            ['break_distance', 'asc'],
+            ['starts_at', 'asc']
+        ])->values();
+
+        $hmifCount = $hmifCandidates->count();
+        $hmifSlots = $sortedForHmif->take($hmifCount);
+        
+        // The rest of the slots
+        $regularSlots = $sortedForHmif->slice($hmifCount)->sortBy([
+            ['interview_day_id', 'asc'],
+            ['starts_at', 'asc']
+        ])->values();
+
+        // Assign HMIF
+        foreach ($hmifCandidates as $index => $candidate) {
+            $slot = $hmifSlots[$index];
+            unset($slot->break_distance);
+            $slot->update(['candidate_id' => $candidate->id]);
+        }
+
+        // Assign Regular
+        foreach ($regularCandidates as $index => $candidate) {
+            $slot = $regularSlots[$index];
+            unset($slot->break_distance);
+            $slot->update(['candidate_id' => $candidate->id]);
+        }
+
+        // 7. Update Day estimates
+        foreach ($days as $day) {
             $trueFirstStart = InterviewSlot::where('interview_day_id', $day->id)->min('starts_at');
             $trueLastEnd = InterviewSlot::where('interview_day_id', $day->id)->max('ends_at');
-
             $day->update(['ends_at' => $trueLastEnd]);
-
             $totalSessions = InterviewSlot::where('interview_day_id', $day->id)->count();
 
             $reports[$day->date->format('Y-m-d')] = [
                 'sessions' => $totalSessions,
-                'first_start' => substr((string)$trueFirstStart, 0, 5),
-                'estimated_finish' => substr((string)$trueLastEnd, 0, 5),
-                'left_over' => max(0, $slotsForThisDay - $sessions),
+                'first_start' => $trueFirstStart ? substr((string)$trueFirstStart, 0, 5) : '-',
+                'estimated_finish' => $trueLastEnd ? substr((string)$trueLastEnd, 0, 5) : '-',
+                'left_over' => 0,
             ];
         }
 
-        // Left overs if any day couldn't fit? We actually just assign until they are done.
-        // Wait, the prompt says: "Persist empty slots first, then assign candidates in order, so empty slots exist for manual use."
-        // Oh! "Persist empty slots first, then assign candidates in order, so empty slots exist for manual use."
-        // Wait, if we just generate slots for the REQUIRED number of candidates, there are NO empty slots.
-        // Let me re-read the prompt: "Persist empty slots first, then assign candidates in order, so empty slots exist for manual use."
         return [
             'days' => $reports,
-            'skipped_hmif' => $skippedHmif,
+            'skipped_hmif' => 0,
             'skipped_duplicate' => $skippedDuplicate,
         ];
     }
 }
-

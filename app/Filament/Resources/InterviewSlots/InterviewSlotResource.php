@@ -148,7 +148,7 @@ class InterviewSlotResource extends Resource
                             ->label('Kandidat')
                             ->options(function () {
                                 $scheduled = InterviewSlot::whereNotNull('candidate_id')->pluck('candidate_id')->toArray();
-                                $candidates = Candidate::where('is_hmif', false)->get();
+                                $candidates = Candidate::get();
                                 $seen = [];
                                 $options = [];
                                 foreach ($candidates as $c) {

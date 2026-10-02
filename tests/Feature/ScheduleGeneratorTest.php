@@ -93,19 +93,22 @@ class ScheduleGeneratorTest extends TestCase
         $this->assertEquals('09:05:00', $slots[2]->starts_at);
     }
 
-    public function test_hmif_and_duplicate_skipped()
+    public function test_hmif_scheduled_but_duplicate_skipped()
     {
         $day = InterviewDay::factory()->create();
 
-        Candidate::factory()->create(['is_hmif' => true]);
+        $c_hmif = Candidate::factory()->create(['is_hmif' => true]);
         $c1 = Candidate::factory()->create(['is_hmif' => false]);
         $c2 = Candidate::factory()->create(['is_duplicate' => true, 'is_hmif' => false]);
 
         $generator = new ScheduleGenerator;
         $generator->generate();
 
-        $this->assertEquals(1, InterviewSlot::count());
-        $this->assertEquals($c1->id, InterviewSlot::first()->candidate_id);
+        $this->assertEquals(2, InterviewSlot::count());
+        $scheduledIds = InterviewSlot::pluck('candidate_id')->toArray();
+        $this->assertContains($c1->id, $scheduledIds);
+        $this->assertContains($c_hmif->id, $scheduledIds);
+        $this->assertNotContains($c2->id, $scheduledIds);
     }
 
     public function test_same_name_different_whatsapp_both_scheduled()
