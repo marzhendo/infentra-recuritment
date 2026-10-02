@@ -53,6 +53,10 @@ class HasilSeleksi extends Page implements HasTable
                 ->label('Export Per Divisi')
                 ->action(fn () => $this->exportCsv('divisi'))
                 ->visible(fn () => auth()->user()->role === \App\Enums\Role::Admin),
+            \Filament\Actions\Action::make('export_final')
+                ->label('Export Final (SK)')
+                ->action(fn () => $this->exportCsv('final'))
+                ->visible(fn () => auth()->user()->role === \App\Enums\Role::Admin),
         ];
     }
 
@@ -377,6 +381,64 @@ class HasilSeleksi extends Page implements HasTable
                             $this->neutraliseCsv($divName),
                             $this->neutraliseCsv($record->candidate->display_name),
                             $this->neutraliseCsv($record->final_status),
+                        ];
+                        fputcsv($file, $row);
+                    }
+                }
+            } elseif ($type === 'final') {
+                fputcsv($file, ['No', 'Nama', 'NIM', 'Divisi']);
+                
+                $orderAndQuota = [
+                    'Acara' => 5,
+                    'Humas' => 4,
+                    'Perkap' => 6,
+                    'PDD' => 6,
+                    'Keamanan' => 6,
+                    'Sponsor' => 4,
+                    'Danus & Konsum' => 5,
+                    'IT Team' => 4,
+                ];
+
+                $placements = Placement::with(['candidate', 'division'])->where('final_status', 'lolos')->get();
+                
+                // Group by division names or aliases
+                $placedByDivision = [];
+                foreach ($placements as $record) {
+                    $divName = $record->division?->name;
+                    if (!$divName) continue;
+                    
+                    // Normalize names to match the $orderAndQuota keys
+                    if (str_contains(strtolower($divName), 'sponsor')) $divName = 'Sponsor';
+                    if (str_contains(strtolower($divName), 'danus')) $divName = 'Danus & Konsum';
+                    if (str_contains(strtolower($divName), 'acara')) $divName = 'Acara';
+                    if (str_contains(strtolower($divName), 'humas')) $divName = 'Humas';
+                    if (str_contains(strtolower($divName), 'perkap')) $divName = 'Perkap';
+                    if (str_contains(strtolower($divName), 'pdd')) $divName = 'PDD';
+                    if (str_contains(strtolower($divName), 'keamanan')) $divName = 'Keamanan';
+                    if (str_contains(strtolower($divName), 'it')) $divName = 'IT Team';
+
+                    if (!isset($placedByDivision[$divName])) {
+                        $placedByDivision[$divName] = [];
+                    }
+                    $placedByDivision[$divName][] = $record->candidate;
+                }
+
+                $globalNo = 1;
+                foreach ($orderAndQuota as $div => $quota) {
+                    $candidates = $placedByDivision[$div] ?? [];
+                    // Sort candidates alphabetically
+                    usort($candidates, fn($a, $b) => strcmp($a->display_name, $b->display_name));
+                    
+                    // Fill up to quota, or more if they exceeded quota
+                    $limit = max($quota, count($candidates));
+                    for ($i = 0; $i < $limit; $i++) {
+                        $candidate = $candidates[$i] ?? null;
+                        
+                        $row = [
+                            $globalNo++,
+                            $candidate ? $this->neutraliseCsv($candidate->display_name) : 'KOSONG',
+                            $candidate ? $this->neutraliseCsv($candidate->nim) : '-',
+                            $div,
                         ];
                         fputcsv($file, $row);
                     }
