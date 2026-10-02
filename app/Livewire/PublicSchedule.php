@@ -33,7 +33,7 @@ class PublicSchedule extends Component
                     $items = collect();
 
                     foreach ($day->interviewSlots as $slot) {
-                        if ($slot->candidate && !$slot->candidate->is_hmif) {
+                        if ($slot->candidate) {
                             $items->push([
                                 'type' => 'slot',
                                 'starts_at' => substr($slot->starts_at, 0, 5),
@@ -57,10 +57,10 @@ class PublicSchedule extends Component
                     return [
                         'id' => $day->id,
                         'date' => \Carbon\Carbon::parse($day->date)->translatedFormat('l, d F Y'),
-                        'raw_date' => $day->date,
+                        'raw_date' => (string) $day->date, // Cast to string to prevent Carbon serialization issues
                         'items' => $items->sortBy('sort_time')->values()->all(),
                     ];
-                });
+                })->toArray();
         });
     }
 
