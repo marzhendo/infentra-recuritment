@@ -199,9 +199,15 @@ class InterviewSlotResource extends Resource
                     ])
                     ->action(function (InterviewSlot $record, array $data) {
                         $target = InterviewSlot::find($data['target_slot_id']);
-                        $temp = $record->candidate_id;
-                        $record->update(['candidate_id' => $target->candidate_id]);
-                        $target->update(['candidate_id' => $temp]);
+                        $tempRecord = $record->candidate_id;
+                        $tempTarget = $target->candidate_id;
+                        
+                        // Set to null first to avoid unique constraint violations
+                        $record->update(['candidate_id' => null]);
+                        $target->update(['candidate_id' => null]);
+                        
+                        $record->update(['candidate_id' => $tempTarget]);
+                        $target->update(['candidate_id' => $tempRecord]);
                     }),
                 ]),
             ]);

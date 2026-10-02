@@ -162,6 +162,46 @@ class HasilSeleksi extends Page implements HasTable
                     ->modalSubmitAction(false)
                     ->modalCancelAction(fn($a) => $a->label('Tutup'))
                     ->modalContent(fn ($record) => view('filament.infolists.components.penilaian-dan-catatan', ['getRecord' => fn() => $record])),
+                Action::make('tetapkan_keputusan')
+                    ->label('Beri Keputusan')
+                    ->icon('heroicon-o-pencil')
+                    ->visible(fn () => auth()->user()->role === \App\Enums\Role::Koor)
+                    ->form([
+                        Select::make('status')
+                            ->label('Status')
+                            ->options([
+                                'lolos' => 'Lolos',
+                                'cadangan' => 'Cadangan',
+                                'tidak_lolos' => 'Tidak Lolos',
+                            ])
+                            ->required(),
+                        \Filament\Forms\Components\Textarea::make('catatan')
+                            ->label('Catatan Koor')
+                    ])
+                    ->fillForm(function ($record) {
+                        $divisionId = auth()->user()->division_id;
+                        $decision = \App\Models\Decision::where('candidate_id', $record->id)
+                            ->where('division_id', $divisionId)
+                            ->first();
+                        return [
+                            'status' => $decision?->status?->value ?? $decision?->status,
+                            'catatan' => $decision?->catatan,
+                        ];
+                    })
+                    ->action(function ($record, array $data) {
+                        $divisionId = auth()->user()->division_id;
+                        \App\Models\Decision::updateOrCreate(
+                            [
+                                'candidate_id' => $record->id,
+                                'division_id' => $divisionId,
+                            ],
+                            [
+                                'status' => $data['status'],
+                                'catatan' => $data['catatan'],
+                                'decided_by' => auth()->id(),
+                            ]
+                        );
+                    }),
                 Action::make('tetapkan_penempatan')
                     ->label('Tetapkan Penempatan')
                     ->icon('heroicon-o-check-badge')

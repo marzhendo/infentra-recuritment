@@ -77,12 +77,13 @@
                 </x-slot>
             </x-filament::section>
 
-            <div style="opacity: 0.5;">
-                <x-filament::section>
-                    <x-slot name="heading">7. Keputusan dan penempatan</x-slot>
-                    <x-slot name="description">Segera hadir di Fase 6</x-slot>
-                </x-filament::section>
-            </div>
+            <x-filament::section>
+                <x-slot name="heading">7. Keputusan dan penempatan</x-slot>
+                <x-slot name="description">Pantau hasil seleksi dan tetapkan penempatan</x-slot>
+                <x-slot name="headerEnd">
+                    <x-filament::button tag="a" href="/admin/hasil-seleksi" color="gray">Ke Hasil Seleksi</x-filament::button>
+                </x-slot>
+            </x-filament::section>
         </div>
     @else
         <x-filament::section>
